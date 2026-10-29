@@ -1,0 +1,396 @@
+/* SHD Performance dashboard. */
+
+.shd-perf {
+	--shd-good: #00703c;
+	--shd-good-bg: #e6f4ea;
+	--shd-warn: #8a5300;
+	--shd-warn-bg: #fcf0d9;
+	--shd-bad: #b32d2e;
+	--shd-bad-bg: #fbe7e7;
+	--shd-muted: #50575e;
+	--shd-muted-bg: #f0f0f1;
+	--shd-accent: #2271b1;
+	--shd-accent-bg: #e9f1f8;
+	--shd-border: #dcdcde;
+	max-width: 1180px;
+}
+
+.shd-perf h1 .shd-version {
+	font-size: 13px;
+	font-weight: 400;
+	color: var(--shd-muted);
+	vertical-align: middle;
+}
+
+.shd-body {
+	padding-top: 16px;
+}
+
+.shd-intro {
+	max-width: 820px;
+}
+
+.shd-intro p,
+.shd-feature p,
+.shd-task__body p,
+.shd-card p {
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+/* Cards */
+
+.shd-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+	gap: 16px;
+	align-items: start;
+}
+
+.shd-grid--2 {
+	grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+}
+
+.shd-card {
+	background: #fff;
+	border: 1px solid var(--shd-border);
+	border-radius: 6px;
+	padding: 4px 20px 12px;
+}
+
+.shd-card h2 {
+	font-size: 16px;
+}
+
+.shd-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.shd-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin: 12px 0;
+}
+
+.shd-inline-form {
+	display: inline-block;
+	margin: 0;
+}
+
+.shd-list {
+	margin: 8px 0 12px 0;
+}
+
+.shd-list li {
+	margin-bottom: 6px;
+}
+
+/* Badges */
+
+.shd-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.6;
+	white-space: nowrap;
+	vertical-align: middle;
+	background: var(--shd-muted-bg);
+	color: var(--shd-muted);
+}
+
+.shd-badge--good,
+.shd-badge--done,
+.shd-badge--live,
+.shd-badge--low {
+	background: var(--shd-good-bg);
+	color: var(--shd-good);
+}
+
+.shd-badge--warn,
+.shd-badge--open,
+.shd-badge--test,
+.shd-badge--medium {
+	background: var(--shd-warn-bg);
+	color: var(--shd-warn);
+}
+
+.shd-badge--bad {
+	background: var(--shd-bad-bg);
+	color: var(--shd-bad);
+}
+
+.shd-badge--optional,
+.shd-badge--info {
+	background: var(--shd-accent-bg);
+	color: var(--shd-accent);
+}
+
+/* Progress */
+
+.shd-progress {
+	height: 10px;
+	border-radius: 999px;
+	background: var(--shd-muted-bg);
+	overflow: hidden;
+	max-width: 520px;
+}
+
+.shd-progress span {
+	display: block;
+	height: 100%;
+	background: var(--shd-good);
+	border-radius: 999px;
+}
+
+.shd-progress-label {
+	margin-top: 6px;
+	color: var(--shd-muted);
+}
+
+/* Groups and checklist */
+
+.shd-group {
+	margin-top: 28px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--shd-border);
+	font-size: 15px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--shd-muted);
+}
+
+.shd-task {
+	background: #fff;
+	border: 1px solid var(--shd-border);
+	border-left-width: 4px;
+	border-radius: 4px;
+	margin: 10px 0;
+	max-width: 900px;
+}
+
+.shd-task--done {
+	border-left-color: var(--shd-good);
+}
+
+.shd-task--open {
+	border-left-color: #dba617;
+}
+
+.shd-task summary {
+	cursor: pointer;
+	padding: 12px 16px;
+	font-size: 14px;
+	list-style-position: inside;
+}
+
+.shd-task summary:focus-visible {
+	outline: 2px solid var(--shd-accent);
+	outline-offset: -2px;
+}
+
+.shd-task__title {
+	font-weight: 600;
+}
+
+.shd-task--done .shd-task__title {
+	color: var(--shd-muted);
+}
+
+.shd-task__body {
+	padding: 0 16px 8px 16px;
+	border-top: 1px solid var(--shd-muted-bg);
+}
+
+.shd-task__status {
+	background: var(--shd-muted-bg);
+	padding: 6px 10px;
+	border-radius: 4px;
+}
+
+.shd-steps {
+	margin-left: 1.6em;
+}
+
+.shd-steps li {
+	font-size: 14px;
+	line-height: 1.55;
+	margin-bottom: 8px;
+}
+
+.shd-links .button {
+	margin: 0 6px 6px 0;
+}
+
+/* Wizard */
+
+.shd-wizard {
+	max-width: 820px;
+	padding: 8px 28px 20px;
+}
+
+.shd-wizard h2 {
+	font-size: 20px;
+	line-height: 1.35;
+}
+
+.shd-eyebrow {
+	margin-bottom: 0;
+	color: var(--shd-muted);
+	font-size: 13px !important;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.shd-wizard__nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin-top: 20px;
+	padding-top: 16px;
+	border-top: 1px solid var(--shd-border);
+}
+
+/* Optimizations */
+
+.shd-feature {
+	display: flex;
+	gap: 24px;
+	align-items: flex-start;
+	justify-content: space-between;
+	background: #fff;
+	border: 1px solid var(--shd-border);
+	border-radius: 4px;
+	padding: 4px 16px;
+	margin: 10px 0;
+}
+
+.shd-feature__text {
+	max-width: 760px;
+}
+
+.shd-feature h3 {
+	font-size: 14px;
+	margin: 12px 0 0;
+}
+
+.shd-seg {
+	display: inline-flex;
+	flex-shrink: 0;
+	margin: 14px 0;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.shd-seg label {
+	position: relative;
+	margin: 0;
+}
+
+.shd-seg input {
+	position: absolute;
+	opacity: 0;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+}
+
+.shd-seg span {
+	display: block;
+	min-width: 44px;
+	padding: 6px 10px;
+	text-align: center;
+	cursor: pointer;
+	background: #fff;
+	border-left: 1px solid #c3c4c7;
+}
+
+.shd-seg label:first-child span {
+	border-left: 0;
+}
+
+.shd-seg input:checked + .shd-seg__off {
+	background: var(--shd-muted);
+	color: #fff;
+}
+
+.shd-seg input:checked + .shd-seg__test {
+	background: #dba617;
+	color: #1d2327;
+}
+
+.shd-seg input:checked + .shd-seg__live {
+	background: var(--shd-good);
+	color: #fff;
+}
+
+.shd-seg input:focus-visible + span {
+	outline: 2px solid var(--shd-accent);
+	outline-offset: -3px;
+}
+
+.shd-advanced {
+	margin-top: 28px;
+	max-width: 1000px;
+}
+
+.shd-advanced summary {
+	cursor: pointer;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+/* Tables and vitals */
+
+.shd-table {
+	max-width: 1100px;
+	margin-bottom: 16px;
+}
+
+.shd-table td,
+.shd-table th {
+	vertical-align: top;
+}
+
+.shd-vitals th[scope="row"] {
+	font-weight: 600;
+}
+
+.shd-assessment {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+}
+
+.shd-metric {
+	color: var(--shd-muted);
+}
+
+.shd-weights label {
+	margin-right: 14px;
+}
+
+@media (max-width: 782px) {
+	.shd-feature {
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.shd-grid,
+	.shd-grid--2 {
+		grid-template-columns: 1fr;
+	}
+
+	.shd-wizard {
+		padding: 4px 16px 16px;
+	}
+}

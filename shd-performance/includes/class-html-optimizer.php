@@ -52,6 +52,7 @@ final class Html_Optimizer {
 	private $handle_src     = array();
 	private $uses_qi        = false;
 	private $uses_lastudio  = false;
+	private $uses_dlicon    = false;
 	private $recaptcha_ok   = false;
 	private $has_toc        = false;
 	private $toc_collapsed  = 0;
@@ -66,6 +67,7 @@ final class Html_Optimizer {
 	// LCP image candidates: bookmark name => score.
 	private $lcp            = array();
 	private $lcp_counter    = 0;
+	private $other_high     = false;
 
 	// Scripts.
 	private $any_delayed    = false;
@@ -203,6 +205,9 @@ final class Html_Optimizer {
 		}
 
 		$this->has_body     = (bool) preg_match( '/<body\b/i', $html );
+		// LA-Studio Kit adds its "dlicon" icon font stylesheet to every page with its widgets, but
+		// draws its icons as inline SVG; the font is only needed for class="dlicon …" elements.
+		$this->uses_dlicon = (bool) preg_match( '/class=["\'][^"\']*\bdlicon\b|(?:["\']|&quot;)dlicon\s/i', $html );
 		$this->recaptcha_ok = false !== strpos( $html, 'elementor-g-recaptcha' )
 			&& false === stripos( $html, 'wpcf7' )
 			&& false === stripos( $html, 'gform_' )
@@ -539,8 +544,19 @@ final class Html_Optimizer {
 					$p->remove_attribute( 'loading' );
 					$loading = null;
 				}
-			} elseif ( $this->in_first_screen() ) {
-				$this->consider_lcp( $p );
+			} else {
+				// WordPress guesses the main image from the post content, which with Elementor
+				// templates is often an image far down the page. Only the chosen main image keeps
+				// high priority; WordPress's choice gets it back if no main image is found.
+				if ( 'high' === $p->get_attribute( 'fetchpriority' ) ) {
+					$p->remove_attribute( 'fetchpriority' );
+					if ( ! $this->other_high && $p->set_bookmark( 'shd_high' ) ) {
+						$this->other_high = true;
+					}
+				}
+				if ( $this->in_first_screen() ) {
+					$this->consider_lcp( $p );
+				}
 			}
 		}
 
@@ -608,12 +624,12 @@ final class Html_Optimizer {
 	 * @param \WP_HTML_Tag_Processor $p Processor.
 	 */
 	private function apply_lcp( $p ) {
-		if ( empty( $this->lcp ) ) {
-			return;
-		}
 		arsort( $this->lcp );
 		$winner = key( $this->lcp );
-		if ( ! $p->seek( $winner ) ) {
+		if ( null === $winner || ! $p->seek( $winner ) ) {
+			if ( $this->other_high && $p->seek( 'shd_high' ) ) {
+				$p->set_attribute( 'fetchpriority', 'high' );
+			}
 			return;
 		}
 		$p->set_attribute( 'fetchpriority', 'high' );
@@ -997,7 +1013,7 @@ final class Html_Optimizer {
 		if ( ! $this->uses_lastudio && ( 0 === strpos( $handle, 'lastudio-kit' ) || 0 === strpos( $handle, 'lakit-' ) ) ) {
 			return true;
 		}
-		return false;
+		return 'elementor-icons-dlicon' === $handle && ! $this->uses_dlicon;
 	}
 
 	/**

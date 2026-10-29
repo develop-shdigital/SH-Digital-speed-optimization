@@ -98,7 +98,7 @@ final class Settings {
 				'default' => 'live',
 				'risk'    => 'low',
 				'title'   => __( 'Load the cookie banner without blocking the page', 'shd-performance' ),
-				'fixes'   => __( 'CookieFirst’s consent.js is loaded synchronously in the <head> and held back the first paint by about 1 s on phones. This loads it async with an early connection. On this site CookieFirst does not block scripts itself (script_loading: do-nothing); the tracking scripts read the consent cookie, so consent handling is unchanged.', 'shd-performance' ),
+				'fixes'   => __( 'CookieFirst’s consent.js is loaded synchronously in the <head> and held back the first paint by about 1 s on phones. This loads it with defer (it runs as soon as the page has been read, without blocking it) and an early connection. On this site CookieFirst does not block scripts itself (script_loading: do-nothing); the tracking scripts read the consent cookie and start only after it has run, so consent handling is unchanged.', 'shd-performance' ),
 			),
 			'dedupe_scripts'      => array(
 				'group'   => 'javascript',

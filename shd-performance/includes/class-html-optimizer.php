@@ -810,9 +810,11 @@ final class Html_Optimizer {
 		}
 
 		if ( self::matches( $src, (array) $this->s['consent_scripts'] ) ) {
-			if ( ! empty( $this->on['consent_async'] ) && null === $p->get_attribute( 'async' ) ) {
-				$p->remove_attribute( 'defer' );
-				$p->set_attribute( 'async', true );
+			// defer rather than async: CookieFirst's loader writes its banner script with
+			// document.write() when it runs before <body> exists, which browsers ignore in
+			// async scripts (no banner). A deferred script runs once the page has been read.
+			if ( ! empty( $this->on['consent_async'] ) && null === $p->get_attribute( 'async' ) && null === $p->get_attribute( 'defer' ) ) {
+				$p->set_attribute( 'defer', true );
 				$this->count( 'consent_async' );
 			}
 			$this->add_preconnect( $src );

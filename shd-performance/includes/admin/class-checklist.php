@@ -193,6 +193,7 @@ final class Checklist {
 				'why'   => __( 'The /resultate/ page alone loads about 3.5 MB more image data than needed (mockups of 450–740 KB each).', 'shd-performance' ),
 				'steps' => array(
 					__( 'For each file in the list on the Tools tab: export it at the largest size it is displayed, times two for sharp screens (rarely more than 1600 px wide), as WebP at quality 80–85 (visually lossless).', 'shd-performance' ),
+					__( 'Photos saved as PNG are 3–4 times larger than as WebP. Convert them too, for example the picture on /kontakt/ (628 × 647 px, 107 KB as PNG).', 'shd-performance' ),
 					__( 'Replace the file while keeping its URL (for example with the “Enable Media Replace” plugin), so no page needs editing.', 'shd-performance' ),
 					__( 'Keep the originals in your archive.', 'shd-performance' ),
 				),
@@ -212,6 +213,19 @@ final class Checklist {
 					__( 'Logo: upload it as SVG (Safe SVG is installed) or as a PNG/WebP about 480 px wide, and use it in the header template’s Site Logo widget.', 'shd-performance' ),
 				),
 				'links' => array( __( 'Media library', 'shd-performance' ) => admin_url( 'upload.php' ) ),
+			),
+			array(
+				'id'       => 'toc-phones',
+				'group'    => __( 'Layout', 'shd-performance' ),
+				'title'    => __( 'Optional: start the blog table of contents collapsed on phones', 'shd-performance' ),
+				'optional' => true,
+				'why'      => __( 'On posts with many headings the open table of contents fills the first screen on phones and pushes the featured image out of it (8 of 30 posts). For first-time visitors the cookie banner then becomes the largest element, and PageSpeed measures a slow LCP: about 4.5 s and a mobile score of about 82, instead of about 2 s and 98 with a collapsed list. This is a design choice, so it is off by default.', 'shd-performance' ),
+				'steps'    => array(
+					__( 'Open a long post on a phone, for example /wie-findet-google-meine-website/, and decide whether a collapsed table of contents with an arrow button fits your design. The setting applies to visitors as soon as it is saved and can be switched back the same way.', 'shd-performance' ),
+					__( 'If yes: Optimizations tab → Advanced settings → “Table of contents on phones”: “Collapsed, with a button to open it”. Save. If not, mark this task as done.', 'shd-performance' ),
+				),
+				'links'    => array( __( 'Advanced settings', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=features' ) ),
+				'auto'     => array( __CLASS__, 'auto_toc_phones' ),
 			),
 			array(
 				'id'    => 'tracking-ga',
@@ -453,6 +467,19 @@ final class Checklist {
 		return array(
 			'status' => 'good' === $result['status'] ? 'done' : ( 'info' === $result['status'] ? 'unknown' : 'open' ),
 			'note'   => $result['value'],
+		);
+	}
+
+	public static function auto_toc_phones() {
+		if ( 'collapsed' === Settings::get()['toc_phones'] ) {
+			return array(
+				'status' => 'done',
+				'note'   => __( 'Collapsed on phones.', 'shd-performance' ),
+			);
+		}
+		return array(
+			'status' => 'open',
+			'note'   => __( 'Open, as designed.', 'shd-performance' ),
 		);
 	}
 

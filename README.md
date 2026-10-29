@@ -23,9 +23,9 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | YouTube widget loads about 1 MB of player code before anyone presses play. | Click-to-play preview. Playback starts with that click. | Live |
 | reCAPTCHA v3 (349 KB) loads on every page. | Loaded when a visitor starts using a form. Submits wait for the token. | Live |
 | Tracking scripts compete with page load. | Start on the first interaction (or after 10 s). Consent handling is unchanged. | Live |
-| CookieFirst `consent.js` blocks the first paint (about 1 s on phones). | Loaded async with an early connection. | Live |
+| CookieFirst `consent.js` blocks the first paint (about 1 s on phones). | Loaded with `defer` and an early connection. | Live |
 | Duplicate scripts, emoji script, unused Qi Addons / LA-Studio Kit files. | Removed on pages that do not need them. | Live |
-| Four Fractul Office `.ttf` files (1.12 MB) with `font-display: auto`. | `swap`, uploaded WOFF2 files (56–58 KB each, lossless), preloads, and a size-matched Arial fallback. | Live |
+| Four Fractul Office `.ttf` files (1.12 MB) with `font-display: auto`. | `swap`, uploaded WOFF2 files (lossless; 58 KB each, plus 25 KB Latin subsets that cover all the site's text), preloads, and a size-matched Arial fallback. | Live |
 | Elementor Pro fills the blog table of contents after loading, which pushes the article down: CLS above 0.1 on 18 of 30 blog pages on phones, up to 0.69. | The same list is written into the page, so nothing moves. It looks and works as before. Optionally it starts collapsed on phones (see below). | Live |
 | The cursor-dot script redraws 60×/s forever and leaves a stray dot on phones. | Same effect on mouse devices, idle when the mouse rests, hidden on touch devices. | Live |
 | JavaScript blocks rendering and causes about 1 s of Total Blocking Time on mobile. | Defer all scripts, or start them on the first interaction (taps and form submits are replayed). | Test |

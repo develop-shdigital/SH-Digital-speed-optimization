@@ -1174,6 +1174,7 @@ final class Html_Optimizer {
 		if ( $this->any_delayed ) {
 			$config = array(
 				'timeout'  => max( 0, (int) $this->s['delay_timeout'] ) * 1000,
+				'all'      => ! empty( $this->on['delay_all_scripts'] ),
 				'replay'   => ! empty( $this->on['delay_all_scripts'] ),
 				'prefetch' => true,
 			);

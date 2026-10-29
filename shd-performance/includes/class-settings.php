@@ -119,7 +119,7 @@ final class Settings {
 				'default' => 'test',
 				'risk'    => 'medium',
 				'title'   => __( 'Start all non-essential JavaScript on the first interaction', 'shd-performance' ),
-				'fixes'   => __( 'Biggest win for the mobile score (Total Blocking Time is 30% of it): Elementor, jQuery and plugin scripts start on the first scroll, tap, click or key press, or after the timeout. Taps on menus, buttons and forms made before that are replayed once the scripts are ready, and the scripts are pre-downloaded in the background. Carousels start moving and the chat or map appear after the first interaction. Check menus, forms, carousels and the video in the preview before switching to Live.', 'shd-performance' ),
+				'fixes'   => __( 'Biggest win for the mobile score (Total Blocking Time is 30% of it): Elementor, jQuery and plugin scripts start on the first scroll, tap, click or key press, or after the timeout, in their original order (Elementor Pro and the add-ons start together with Elementor, as on a normal page load). Taps on menus, buttons and forms made before that are replayed once the scripts are ready. The site’s own script files are pre-downloaded a few seconds after loading, so a later first tap does not wait for the network. Carousels start moving and the chat or map appear after the first interaction. Check menus, forms, carousels and the video in the preview before switching to Live.', 'shd-performance' ),
 			),
 			'fonts'               => array(
 				'group'   => 'fonts',

@@ -14,6 +14,7 @@
 
 	var cfg = w.shdPerfDelay || {};
 	var started = false;
+	var waiting = false;
 	var ready = false;
 	var held = [];
 	var triggers = [ 'keydown', 'mousedown', 'mousemove', 'pointerdown', 'touchstart', 'touchmove', 'wheel', 'scroll', 'focusin' ];
@@ -159,6 +160,15 @@
 		if ( started ) {
 			return;
 		}
+		// An interaction while the page is still downloading: the scripts further down
+		// have not been read yet, so start once the whole document is there.
+		if ( 'loading' === d.readyState ) {
+			if ( ! waiting ) {
+				waiting = true;
+				d.addEventListener( 'DOMContentLoaded', start );
+			}
+			return;
+		}
 		started = true;
 		listen( false );
 
@@ -166,7 +176,8 @@
 		var winLoad = [];
 		var docAdd = d.addEventListener;
 		var winAdd = w.addEventListener;
-		var holding = true;
+		var holding = true; // jQuery ready handlers wait.
+		var loading = true; // Window load handlers wait (also those added by ready handlers).
 		var jqueries = [];
 		var jqReady = [];
 
@@ -194,7 +205,7 @@
 		// listen for shd-load, which is triggered once the scripts have run.
 		function loadAlias( set, args ) {
 			args = Array.prototype.slice.call( args );
-			if ( ! holding || set[ 0 ] !== w ) {
+			if ( ! loading || set[ 0 ] !== w ) {
 				return args;
 			}
 			var rename = function ( types ) {
@@ -214,10 +225,10 @@
 			return args;
 		}
 
-		// jQuery runs ready handlers at once when the page has already loaded. That would
-		// start Elementor before the scripts after it (Elementor Pro, add-ons) are there to
-		// hear about it, so ready handlers wait until all delayed scripts have run, as on a
-		// normal page load.
+		// jQuery runs ready handlers at once when the page has already loaded. With the
+		// page's own scripts delayed (cfg.all), that would start Elementor before the
+		// scripts after it (Elementor Pro, add-ons) are there to hear about it, so ready
+		// handlers wait until all delayed scripts have run, as on a normal page load.
 		function patchJquery() {
 			var $ = w.jQuery;
 			if ( ! $ || ! $.fn || ! $.fn.ready || ! $.fn.on ) {
@@ -240,9 +251,11 @@
 			$.fn.on = function () {
 				return orig.on.apply( this, loadAlias( this, arguments ) );
 			};
-			$.fn.one = function () {
-				return orig.one.apply( this, loadAlias( this, arguments ) );
-			};
+			if ( orig.one ) {
+				$.fn.one = function () {
+					return orig.one.apply( this, loadAlias( this, arguments ) );
+				};
+			}
 		}
 
 		var scripts = queued();
@@ -254,7 +267,9 @@
 		} );
 
 		function next() {
-			patchJquery();
+			if ( cfg.all ) {
+				patchJquery();
+			}
 			if ( index >= scripts.length ) {
 				finish();
 				return;
@@ -294,7 +309,6 @@
 		// handlers (each in its own task, as jQuery runs them), then load handlers.
 		function finish() {
 			d.addEventListener = docAdd;
-			w.addEventListener = winAdd;
 			each( domReady, function ( entry ) {
 				call( entry[ 1 ], entry[ 0 ], entry[ 2 ] );
 			} );
@@ -312,7 +326,10 @@
 		}
 
 		function loaded() {
-			each( winLoad, function ( entry ) {
+			var handlers = winLoad.slice();
+			w.addEventListener = winAdd;
+			loading = false;
+			each( handlers, function ( entry ) {
 				call( entry[ 1 ], entry[ 0 ], entry[ 2 ] );
 			} );
 			each( jqueries, function ( jq ) {

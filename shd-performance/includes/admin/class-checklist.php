@@ -219,7 +219,7 @@ final class Checklist {
 				'group'    => __( 'Layout', 'shd-performance' ),
 				'title'    => __( 'Optional: start the blog table of contents collapsed on phones', 'shd-performance' ),
 				'optional' => true,
-				'why'      => __( 'On posts with many headings the open table of contents fills the first screen on phones and pushes the featured image out of it (8 of 30 posts). For first-time visitors the cookie banner then becomes the largest element, and PageSpeed measures a slow LCP: about 4.5 s and a mobile score of about 82, instead of about 2 s and 98 with a collapsed list. This is a design choice, so it is off by default.', 'shd-performance' ),
+				'why'      => __( 'On posts with many headings the open table of contents fills the first screen on phones and pushes the featured image out of it (8 of 30 posts). For first-time visitors the cookie banner then becomes the largest element, and PageSpeed measures a slow LCP: about 4.5 s and a mobile score of about 80, instead of 2–3 s and 88–96 with a collapsed list. This is a design choice, so it is off by default.', 'shd-performance' ),
 				'steps'    => array(
 					__( 'Open a long post on a phone, for example /wie-findet-google-meine-website/, and decide whether a collapsed table of contents with an arrow button fits your design. The setting applies to visitors as soon as it is saved and can be switched back the same way.', 'shd-performance' ),
 					__( 'If yes: Optimizations tab → Advanced settings → “Table of contents on phones”: “Collapsed, with a button to open it”. Save. If not, mark this task as done.', 'shd-performance' ),

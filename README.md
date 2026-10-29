@@ -34,7 +34,7 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 
 #### One design choice
 
-*Table of contents on phones* (Optimizations → Advanced settings) is **Open, as designed** by default. On blog posts with many headings, the open list fills the first screen on phones and pushes the featured image out of it. For first-time visitors the cookie banner then becomes the largest element on the screen. Because the banner loads in 9 steps from CookieFirst's servers, PageSpeed counts a slow LCP: about 4.5 s and a mobile score of about 82 on the 8 affected posts. With **Collapsed, with a button to open it** those posts score about 98. The arrow button opens the list at once, also before the page's other scripts have started. Desktop is never affected.
+*Table of contents on phones* (Optimizations → Advanced settings) is **Open, as designed** by default. On blog posts with many headings, the open list fills the first screen on phones and pushes the featured image out of it. For first-time visitors the cookie banner then becomes the largest element on the screen. Because the banner loads in 9 steps from CookieFirst's servers, PageSpeed counts a slow LCP: about 4.5 s and a mobile score of about 80 on the 8 affected posts. With **Collapsed, with a button to open it**, the measured post scored 88–96. The arrow button opens the list at once, also before the page's other scripts have started. Desktop is never affected.
 
 Every feature can be set to **Off**, **Test** or **Live**:
 
@@ -47,17 +47,18 @@ Every feature can be set to **Off**, **Test** or **Live**:
 
 - **Overview**: status, the Test view and preview link, health summary, and real-visitor vitals.
 - **Checklist**: a step-by-step guide for everything that needs a person, with automatic status where it can be detected. It covers:
-  - Kadence Performance's mobile cache.
-  - Server speed.
+  - Kadence Performance's mobile cache and its lazy-loading of video covers.
+  - Server speed and an optional CDN.
   - WOFF2 fonts.
-  - Inline SVG icons.
+  - Inline SVG icons instead of the Font Awesome icon fonts.
   - Unused add-ons.
-  - Images.
+  - Oversized image files and image sizes in widgets.
+  - The table of contents on phones (optional design choice).
   - Duplicate Google Analytics.
   - The cookie banner.
   - Accessibility.
   - Redirects, robots.txt and Brotli.
-  - Verification.
+  - Verification in PageSpeed Insights and with real-visitor data.
 - **Optimizations**: the feature switches and advanced settings.
 - **Fonts**: detected fonts, WOFF2 upload, preloads and the fallback metrics.
 - **Web Vitals**: LCP, INP, CLS, FCP and TTFB from real visits, per device and page.
@@ -78,6 +79,40 @@ Every feature can be set to **Off**, **Test** or **Live**:
 - To compare against the original, open any page with `?shd-off=1` as an administrator.
 - To undo everything, deactivate the plugin.
 - If the admin is not reachable, add `define( 'SHD_PERFORMANCE_DISABLE', true );` to `wp-config.php`.
+
+## Results
+
+Measured with Lighthouse 13, the engine behind PageSpeed Insights, using its simulated mid-range phone on slow 4G and its desktop profile. Each page was served from a local replay of the live site's files, before and after the plugin. Mobile shows two runs, because the phone score varies by a few points from run to run.
+
+- **Before:** the site as it is today.
+- **Live only:** the plugin's defaults right after installing.
+- **All:** after switching the Test features to Live.
+
+| Page | Mobile before | Mobile, Live only | Mobile, all | Desktop before | Desktop, all |
+| --- | --- | --- | --- | --- | --- |
+| Homepage | 43 | 96 | 97–99 | 72 | 99 |
+| /resultate/ | 41 | 87 | 93–97 | 71 | 100 |
+| /ueber-uns/ | 42 | 97 | 93–96 | 84 | 99 |
+| /geo-agentur/ | 36 | 69 | 88–96 | 82 | 98 |
+| /was-ist-seo/ | 29 | 91 | 91 | 78 | 98 |
+| /kontakt/ | 42 | 67 | 82–86 | 87 | 99 |
+| /google-ads-agentur/ | 38 | 60 | 73–80 | 74 | 99 |
+| /blog/ | 43 | 71 | 78–79 | 77 | 99 |
+| /wie-findet-google-meine-website/ | 14 | 69 | 78–82 (88–96 with the table of contents collapsed on phones) | 74 | 99 |
+
+Layout shift is 0 on all of these pages, down from up to 0.68 on blog posts. Total Blocking Time on phones fell from 0.8–2.1 s to 0.1–0.5 s.
+
+### Why some phone scores are still below 95
+
+What remains is in the checklist, because it needs changes in Elementor, the media library or other plugins:
+
+- **Font Awesome icon fonts:** about 180 KB on every page. They download while the main image loads. Fix: “Switch Elementor icons to inline SVG”.
+- **/blog/:** the post cards use full-size featured images as backgrounds, 237 KB for the first card alone. Fix: “Use smaller image sizes in widgets”.
+- **/google-ads-agentur/:** the video cover is the full 391 KB image, and Kadence Performance lazy-loads it with an extra script. Fix: turn off “Lazy Load Images” in Kadence and set the cover's image resolution to Large.
+- **/kontakt/:** a photo saved as a 107 KB PNG. Fix: “Replace oversized image files”.
+- **Long blog posts (8 of 30):** the open table of contents fills the first screen on phones, and the cookie banner becomes the slowest element. Fix: the optional collapsed table of contents.
+
+PageSpeed Insights on the live site will differ by a few points, because the network and server differ. The Core Web Vitals report in Search Console needs 28 days of visits after the change.
 
 ## Development
 

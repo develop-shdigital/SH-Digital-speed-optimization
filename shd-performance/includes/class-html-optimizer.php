@@ -73,6 +73,10 @@ final class Html_Optimizer {
 	private $seen_src       = array();
 	private $preconnect     = array();
 	private $held_recaptcha = false;
+	private $has_body       = false;
+
+	/** @var array<int,array{0:string,1:array<string,string>}> Cookie banner scripts started from the top of <body>. */
+	private $consent_moved  = array();
 
 	// Video facades.
 	private $pending_video  = null;
@@ -198,6 +202,7 @@ final class Html_Optimizer {
 			}
 		}
 
+		$this->has_body     = (bool) preg_match( '/<body\b/i', $html );
 		$this->recaptcha_ok = false !== strpos( $html, 'elementor-g-recaptcha' )
 			&& false === stripos( $html, 'wpcf7' )
 			&& false === stripos( $html, 'gform_' )
@@ -810,11 +815,21 @@ final class Html_Optimizer {
 		}
 
 		if ( self::matches( $src, (array) $this->s['consent_scripts'] ) ) {
-			// defer rather than async: CookieFirst's loader writes its banner script with
-			// document.write() when it runs before <body> exists, which browsers ignore in
-			// async scripts (no banner). A deferred script runs once the page has been read.
-			if ( ! empty( $this->on['consent_async'] ) && null === $p->get_attribute( 'async' ) && null === $p->get_attribute( 'defer' ) ) {
-				$p->set_attribute( 'defer', true );
+			// Not plain async: CookieFirst's loader writes its banner script with document.write()
+			// when it runs before <body> exists, which browsers ignore in async scripts (no banner).
+			// Not defer either: that waits for every blocking script in the body. The file is
+			// preloaded from the head and started by a tiny script at the top of <body>.
+			$type = strtolower( trim( (string) $p->get_attribute( 'type' ) ) );
+			if ( ! empty( $this->on['consent_async'] ) && $this->has_body && null === $p->get_attribute( 'async' ) && null === $p->get_attribute( 'defer' ) && in_array( $type, self::CLASSIC_TYPES, true ) ) {
+				$attributes = array();
+				foreach ( (array) $p->get_attribute_names_with_prefix( '' ) as $name ) {
+					if ( ! in_array( $name, array( 'src', 'type', 'async', 'defer' ), true ) ) {
+						$value               = $p->get_attribute( $name );
+						$attributes[ $name ] = true === $value ? '' : (string) $value;
+					}
+				}
+				$this->consent_moved[] = array( $src, $attributes );
+				$p->set_attribute( self::REMOVE_MARK, true );
 				$this->count( 'consent_async' );
 			}
 			$this->add_preconnect( $src );
@@ -1023,9 +1038,29 @@ final class Html_Optimizer {
 		$html = preg_replace( '/<link\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>[ \t]*\n?/i', '', $html );
 
 		$html = $this->insert_head( $html );
+		$html = $this->insert_body_start( $html );
 		$html = $this->insert_body_end( $html );
 
 		return $html;
+	}
+
+	/**
+	 * Starts the cookie banner scripts at the top of <body> (async, so nothing waits for them).
+	 *
+	 * @param string $html HTML.
+	 * @return string
+	 */
+	private function insert_body_start( $html ) {
+		if ( empty( $this->consent_moved ) || ! preg_match( '/<body\b[^>]*>/i', $html, $m, PREG_OFFSET_CAPTURE ) ) {
+			return $html;
+		}
+		$code = '';
+		foreach ( $this->consent_moved as $script ) {
+			$code .= 's=d.createElement("script");s.src=' . wp_json_encode( $script[0] ) . ';a=' . wp_json_encode( (object) $script[1] ) . ';'
+				. 'for(k in a){s.setAttribute(k,a[k])}d.body.appendChild(s);';
+		}
+		$at = $m[0][1] + strlen( $m[0][0] );
+		return substr( $html, 0, $at ) . '<script id="shd-perf-consent">(function(d){var s,a,k;' . $code . '}(document));</script>' . substr( $html, $at );
 	}
 
 	/**
@@ -1103,6 +1138,9 @@ final class Html_Optimizer {
 
 		foreach ( array_keys( $this->preconnect ) as $host ) {
 			$tags .= '<link rel="preconnect" href="https://' . esc_attr( $host ) . '">' . "\n";
+		}
+		foreach ( $this->consent_moved as $script ) {
+			$tags .= '<link rel="preload" as="script" href="' . esc_attr( $script[0] ) . '">' . "\n";
 		}
 
 		if ( ! empty( $this->on['fonts'] ) ) {

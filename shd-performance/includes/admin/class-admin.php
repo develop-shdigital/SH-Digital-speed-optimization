@@ -354,6 +354,9 @@ final class Admin {
 		if ( isset( $input['animation_mode'] ) ) {
 			$clean['animation_mode'] = 'keep_below' === $input['animation_mode'] ? 'keep_below' : 'all';
 		}
+		if ( isset( $input['toc_phones'] ) ) {
+			$clean['toc_phones'] = 'collapsed' === $input['toc_phones'] ? 'collapsed' : 'expanded';
+		}
 		if ( isset( $input['delay_timeout'] ) ) {
 			$clean['delay_timeout'] = max( 0, min( 60, (int) $input['delay_timeout'] ) );
 		}
@@ -894,7 +897,6 @@ final class Admin {
 			'content'     => __( 'Content and images', 'shd-performance' ),
 			'third-party' => __( 'Third-party scripts', 'shd-performance' ),
 			'javascript'  => __( 'JavaScript', 'shd-performance' ),
-			'css'         => __( 'CSS', 'shd-performance' ),
 			'fonts'       => __( 'Fonts', 'shd-performance' ),
 			'layout'      => __( 'Layout stability', 'shd-performance' ),
 			'monitoring'  => __( 'Monitoring', 'shd-performance' ),
@@ -950,6 +952,10 @@ final class Admin {
 		printf( '<option value="all"%1$s>%2$s</option>', selected( $settings['animation_mode'], 'all', false ), esc_html__( 'Remove everywhere (fastest)', 'shd-performance' ) );
 		printf( '<option value="keep_below"%1$s>%2$s</option>', selected( $settings['animation_mode'], 'keep_below', false ), esc_html__( 'Keep below the first screen', 'shd-performance' ) );
 		echo '</select><p class="description">' . esc_html__( '“Keep below the first screen” keeps the animations further down the page; they then depend on Elementor’s JavaScript again.', 'shd-performance' ) . '</p></td></tr>';
+		echo '<tr><th scope="row"><label for="shd-toc-phones">' . esc_html__( 'Table of contents on phones', 'shd-performance' ) . '</label></th><td><select id="shd-toc-phones" name="shd[toc_phones]">';
+		printf( '<option value="expanded"%1$s>%2$s</option>', selected( $settings['toc_phones'], 'expanded', false ), esc_html__( 'Open, as designed', 'shd-performance' ) );
+		printf( '<option value="collapsed"%1$s>%2$s</option>', selected( $settings['toc_phones'], 'collapsed', false ), esc_html__( 'Collapsed, with a button to open it', 'shd-performance' ) );
+		echo '</select><p class="description">' . esc_html__( 'On posts with many headings the open table of contents fills the first screen on phones and pushes the featured image out of it. For first-time visitors the cookie banner then becomes the largest element, which PageSpeed counts as a slow LCP (about 4.5 s instead of 2 s; mobile score about 82 instead of 98 on the affected posts). “Collapsed” shows the heading with an arrow button that opens the list. Desktop is not affected.', 'shd-performance' ) . '</p></td></tr>';
 		$this->number_row( 'delay_timeout', __( 'Start delayed scripts after (seconds)', 'shd-performance' ), $settings['delay_timeout'], 0, 60, __( 'Delayed scripts start on the first interaction or after this time. 0 = only on interaction (visitors who leave without scrolling or tapping are then not counted by analytics).', 'shd-performance' ) );
 		$this->lines_row( 'tracking_patterns', __( 'Tracking scripts to delay', 'shd-performance' ), $settings['tracking_patterns'], __( 'One part of a script address per line.', 'shd-performance' ) );
 		$this->lines_row( 'delay_exclusions', __( 'Never delay', 'shd-performance' ), $settings['delay_exclusions'], __( 'Scripts whose address contains one of these lines always load normally.', 'shd-performance' ) );

@@ -26,12 +26,15 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | CookieFirst `consent.js` blocks the first paint (about 1 s on phones). | Loaded async with an early connection. | Live |
 | Duplicate scripts, emoji script, unused Qi Addons / LA-Studio Kit files. | Removed on pages that do not need them. | Live |
 | Four Fractul Office `.ttf` files (1.12 MB) with `font-display: auto`. | `swap`, uploaded WOFF2 files (56–58 KB each, lossless), preloads, and a size-matched Arial fallback. | Live |
-| Elementor Pro fills the blog table of contents after loading, which pushes the article down: CLS above 0.1 on 18 of 30 blog pages on phones, up to 0.69. | The same list is written into the page, so nothing moves. It looks and works as before. | Live |
+| Elementor Pro fills the blog table of contents after loading, which pushes the article down: CLS above 0.1 on 18 of 30 blog pages on phones, up to 0.69. | The same list is written into the page, so nothing moves. It looks and works as before. Optionally it starts collapsed on phones (see below). | Live |
 | The cursor-dot script redraws 60×/s forever and leaves a stray dot on phones. | Same effect on mouse devices, idle when the mouse rests, hidden on touch devices. | Live |
 | JavaScript blocks rendering and causes about 1 s of Total Blocking Time on mobile. | Defer all scripts, or start them on the first interaction (taps and form submits are replayed). | Test |
 | jQuery Migrate. | Removed. | Test |
-| Widget CSS for content further down blocks the first paint. | Loaded without blocking. | Test |
 | No real-visitor data (Google has none for this site yet). | Cookieless Core Web Vitals measurement with a 75th-percentile dashboard. | Live |
+
+#### One design choice
+
+*Table of contents on phones* (Optimizations → Advanced settings) is **Open, as designed** by default. On blog posts with many headings, the open list fills the first screen on phones and pushes the featured image out of it. For first-time visitors the cookie banner then becomes the largest element on the screen. Because the banner loads in 9 steps from CookieFirst's servers, PageSpeed counts a slow LCP: about 4.5 s and a mobile score of about 82 on the 8 affected posts. With **Collapsed, with a button to open it** those posts score about 98. The arrow button opens the list at once, also before the page's other scripts have started. Desktop is never affected.
 
 Every feature can be set to **Off**, **Test** or **Live**:
 

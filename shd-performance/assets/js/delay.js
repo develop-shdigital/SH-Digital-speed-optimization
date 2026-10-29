@@ -46,7 +46,8 @@
 
 	function replayTarget( event ) {
 		var el = event.target;
-		if ( ! el || ! el.closest || ! el.closest( '.elementor, [data-elementor-type]' ) || el.closest( '[data-shd-yt]' ) ) {
+		// The video preview and the table of contents button have their own, immediate handlers.
+		if ( ! el || ! el.closest || ! el.closest( '.elementor, [data-elementor-type]' ) || el.closest( '[data-shd-yt], [data-shd-toc-toggle]' ) ) {
 			return null;
 		}
 		var control = el.closest( 'a, button, [role="button"], input[type="submit"], input[type="button"], summary, .elementor-custom-embed-image-overlay' );

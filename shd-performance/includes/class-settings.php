@@ -170,13 +170,6 @@ final class Settings {
 				'title'   => __( 'Connect early to required third parties', 'shd-performance' ),
 				'fixes'   => __( 'Adds preconnect hints for third-party scripts that still load during page load (for example CookieFirst).', 'shd-performance' ),
 			),
-			'widget_css_async'    => array(
-				'group'   => 'css',
-				'default' => 'test',
-				'risk'    => 'medium',
-				'title'   => __( 'Load CSS for widgets below the first screen without blocking', 'shd-performance' ),
-				'fixes'   => __( 'Elementor widget stylesheets for widgets that only appear further down the page are loaded without blocking the first paint. Check in the preview that nothing looks unstyled while scrolling quickly.', 'shd-performance' ),
-			),
 			'rum'                 => array(
 				'group'   => 'monitoring',
 				'default' => 'live',
@@ -202,6 +195,7 @@ final class Settings {
 			'states'                => $states,
 			'first_screen_sections' => 2,
 			'animation_mode'        => 'all',
+			'toc_phones'            => 'expanded',
 			'delay_timeout'         => 10,
 			'tracking_patterns'     => array(
 				'googletagmanager.com/gtag/js',

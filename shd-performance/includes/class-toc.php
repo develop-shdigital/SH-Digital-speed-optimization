@@ -24,15 +24,23 @@ final class Toc {
 	const SKIPPED_DOCUMENTS = array( 'header', 'footer', 'popup' );
 
 	const SPINNER_MARK = 'data-shd-toc';
+	const WIDGET_MARK  = 'data-shd-toc-widget';
+	const TITLE_MARK   = 'data-shd-toc-title';
+
+	/** Set on a table of contents that starts collapsed on phones; the value is the max width in px. */
+	const COLLAPSE_ATTR = 'data-shd-toc-min';
 
 	/**
-	 * @param string $html Full HTML document.
-	 * @return array{0:string,1:int} HTML and the number of lists filled in.
+	 * @param string $html     Full HTML document.
+	 * @param int    $collapse Lists start collapsed up to this screen width in px (with a button
+	 *                         to open them); 0 = as designed.
+	 * @return array{0:string,1:int,2:int} HTML, lists filled in, lists set to start collapsed.
 	 */
-	public static function prefill( $html ) {
+	public static function prefill( $html, $collapse = 0 ) {
 		if ( false === strpos( $html, 'elementor-toc__spinner-container' ) ) {
-			return array( $html, 0 );
+			return array( $html, 0, 0 );
 		}
+		$collapse = max( 0, (int) $collapse );
 
 		$p        = new \WP_HTML_Tag_Processor( $html );
 		$stack    = array(); // [ tag, Elementor document type|null, widget id|null, toc index|null ].
@@ -75,6 +83,13 @@ final class Toc {
 				continue;
 			}
 
+			if ( $collapse && self::has_class( $p, 'elementor-toc__header-title' ) ) {
+				$owner = self::current_toc( $stack );
+				if ( null !== $owner ) {
+					$p->set_attribute( self::TITLE_MARK, (string) $owner );
+				}
+			}
+
 			if ( preg_match( '/^H[1-6]$/', $tag ) && null === $heading && ! $template ) {
 				if ( self::in_searched_document( $stack ) && ! self::has_class( $p, 'elementor-toc__header-title' ) ) {
 					$heading = array(
@@ -109,7 +124,17 @@ final class Toc {
 					'settings' => is_array( $settings ) ? $settings : null,
 					'popup'    => self::in_popup( $stack ),
 					'spinner'  => false,
+					'body'     => '',
 				);
+				if ( $collapse ) {
+					$p->set_attribute( self::WIDGET_MARK, (string) $toc );
+				}
+			}
+			if ( self::has_class( $p, 'elementor-toc__body' ) ) {
+				$owner = self::current_toc( $stack );
+				if ( null !== $owner ) {
+					$tocs[ $owner ]['body'] = (string) $p->get_attribute( 'id' );
+				}
 			}
 			if ( self::has_class( $p, 'elementor-toc__spinner-container' ) ) {
 				$owner = self::current_toc( $stack );
@@ -144,7 +169,71 @@ final class Toc {
 			$html
 		);
 
-		return array( is_string( $html ) ? $html : $p->get_updated_html(), $filled );
+		if ( ! is_string( $html ) ) {
+			return array( $p->get_updated_html(), 0, 0 );
+		}
+		if ( ! $collapse ) {
+			return array( $html, $filled, 0 );
+		}
+
+		// Start collapsed on phones: buttons after the title, state on the widget.
+		$collapsed = array();
+		$html      = preg_replace_callback(
+			'~<([a-z][a-z0-9]*)\b[^>]*\s' . self::TITLE_MARK . '="(\d+)"[^>]*>.*?</\1>~is',
+			static function ( $m ) use ( $lists, $tocs, &$collapsed ) {
+				$i       = (int) $m[2];
+				$element = str_replace( ' ' . self::TITLE_MARK . '="' . $m[2] . '"', '', $m[0] );
+				if ( ! isset( $lists[ $i ] ) || '' === $tocs[ $i ]['body'] ) {
+					return $element;
+				}
+				$collapsed[ $i ] = true;
+				return $element . self::buttons( $tocs[ $i ]['body'] );
+			},
+			$html
+		);
+		if ( ! is_string( $html ) ) {
+			return array( $p->get_updated_html(), 0, 0 );
+		}
+
+		$w = new \WP_HTML_Tag_Processor( $html );
+		while ( $w->next_tag() ) {
+			$i = $w->get_attribute( self::WIDGET_MARK );
+			if ( null === $i ) {
+				continue;
+			}
+			$w->remove_attribute( self::WIDGET_MARK );
+			if ( isset( $collapsed[ (int) $i ] ) ) {
+				$w->add_class( 'elementor-toc--collapsed' );
+				$w->set_attribute( self::COLLAPSE_ATTR, (string) $collapse );
+			}
+		}
+		return array( $w->get_updated_html(), $filled, count( $collapsed ) );
+	}
+
+	/**
+	 * Open and close buttons like Elementor Pro's own (its stylesheet shows the right one
+	 * for the elementor-toc--collapsed class); the toc script makes them work at once.
+	 *
+	 * @param string $body Id of the list box.
+	 * @return string
+	 */
+	private static function buttons( $body ) {
+		$locale = get_locale();
+		$de     = 0 === strpos( $locale, 'de' );
+		$labels = array(
+			'expand'   => $de ? 'Inhaltsverzeichnis öffnen' : 'Open table of contents',
+			'collapse' => $de ? ( 0 === strpos( $locale, 'de_CH' ) ? 'Inhaltsverzeichnis schliessen' : 'Inhaltsverzeichnis schließen' ) : 'Close table of contents',
+		);
+		$icons  = array(
+			'expand'   => 'M12 16.2 4.4 8.6l1.5-1.5 6.1 6.1 6.1-6.1 1.5 1.5z',
+			'collapse' => 'M12 7.8l7.6 7.6-1.5 1.5-6.1-6.1-6.1 6.1-1.5-1.5z',
+		);
+		$out    = '';
+		foreach ( $labels as $kind => $label ) {
+			$out .= '<div class="elementor-toc__toggle-button elementor-toc__toggle-button--' . $kind . '" role="button" tabindex="0" aria-controls="' . esc_attr( $body ) . '" aria-expanded="false" aria-label="' . esc_attr( $label ) . '" data-shd-toc-toggle>'
+				. '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="' . $icons[ $kind ] . '"/></svg></div>';
+		}
+		return $out;
 	}
 
 	/**

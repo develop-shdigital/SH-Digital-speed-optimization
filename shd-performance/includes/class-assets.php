@@ -67,13 +67,28 @@ final class Assets {
 	/**
 	 * A table of contents set to "Minimize Box" (which the plugin does not fill in) is
 	 * shown minimized on phones while it loads, as Elementor Pro collapses it there anyway.
+	 * With $collapsed, filled-in lists marked data-shd-toc-min start collapsed on phones
+	 * and their buttons are hidden on larger screens.
 	 *
-	 * @param int $max_width Mobile breakpoint in px.
+	 * @param int  $max_width Mobile breakpoint in px.
+	 * @param bool $collapsed Whether a list starts collapsed on phones.
 	 * @return string
 	 */
-	public static function toc_css( $max_width ) {
+	public static function toc_css( $max_width, $collapsed = false ) {
 		$toc = '.elementor-widget-table-of-contents';
-		return '@media (max-width:' . (int) $max_width . 'px){'
+		$own = '';
+		if ( $collapsed ) {
+			$min  = '[data-shd-toc-min]';
+			$own  = '@media (max-width:' . (int) $max_width . 'px){'
+				. $min . ' .elementor-toc__toggle-button{cursor:pointer;display:inline-flex}'
+				. $min . '.elementor-toc--collapsed .elementor-toc__body,'
+				. $min . '.elementor-toc--collapsed .elementor-toc__toggle-button--collapse,'
+				. $min . ':not(.elementor-toc--collapsed) .elementor-toc__toggle-button--expand{display:none}'
+				. '}'
+				. '@media (min-width:' . ( (int) $max_width + 1 ) . 'px){' . $min . ' .elementor-toc__toggle-button{display:none}}'
+				. $min . ' .elementor-toc__toggle-button svg{width:1em;height:1em;fill:var(--toggle-button-color,currentColor)}';
+		}
+		return $own . '@media (max-width:' . (int) $max_width . 'px){'
 			. $toc . ':has(.elementor-toc__toggle-button--expand) .elementor-toc__body:has(.elementor-toc__spinner-container){display:none!important}'
 			. $toc . ':has(.elementor-toc__spinner-container) .elementor-toc__toggle-button--collapse{display:none!important}'
 			. $toc . ':has(.elementor-toc__spinner-container) .elementor-toc__toggle-button--expand{display:inline-flex!important}'

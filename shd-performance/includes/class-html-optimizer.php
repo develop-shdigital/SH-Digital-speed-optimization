@@ -49,12 +49,12 @@ final class Html_Optimizer {
 	private $font_sig = '';
 
 	// Analysis.
-	private $widget_types   = array();
 	private $handle_src     = array();
 	private $uses_qi        = false;
 	private $uses_lastudio  = false;
 	private $recaptcha_ok   = false;
 	private $has_toc        = false;
+	private $toc_collapsed  = 0;
 
 	// Structure.
 	private $stack          = array();
@@ -62,7 +62,6 @@ final class Html_Optimizer {
 	private $in_footer      = false;
 	private $main_seen      = false;
 	private $top_index      = 0;
-	private $first_screen_widgets = array();
 
 	// LCP image candidates: bookmark name => score.
 	private $lcp            = array();
@@ -120,9 +119,13 @@ final class Html_Optimizer {
 		$this->analyze( $html );
 
 		if ( $this->has_toc && ! empty( $this->on['toc_prefill'] ) ) {
-			list( $html, $filled ) = Toc::prefill( $html );
+			$collapse = 'collapsed' === $this->s['toc_phones'] ? Toc::mobile_max_width() : 0;
+			list( $html, $filled, $this->toc_collapsed ) = Toc::prefill( $html, $collapse );
 			if ( $filled ) {
 				$this->count( 'toc_prefilled', $filled );
+			}
+			if ( $this->toc_collapsed ) {
+				$this->count( 'toc_collapsed', $this->toc_collapsed );
 			}
 		}
 
@@ -169,8 +172,7 @@ final class Html_Optimizer {
 	private function analyze( $html ) {
 		if ( preg_match_all( '/\bdata-widget_type="([a-z0-9_-]+)\./i', $html, $m ) ) {
 			foreach ( $m[1] as $name ) {
-				$name                        = strtolower( $name );
-				$this->widget_types[ $name ] = true;
+				$name = strtolower( $name );
 				if ( 0 === strpos( $name, 'qi' ) ) {
 					$this->uses_qi = true;
 				} elseif ( 0 === strpos( $name, 'lakit' ) || 0 === strpos( $name, 'lastudio' ) ) {
@@ -463,9 +465,6 @@ final class Html_Optimizer {
 		$widget = $p->get_attribute( 'data-widget_type' );
 		if ( is_string( $widget ) && '' !== $widget ) {
 			$name = strtolower( strtok( $widget, '.' ) );
-			if ( $this->in_first_screen() ) {
-				$this->first_screen_widgets[ $name ] = true;
-			}
 			if ( 'theme-post-featured-image' === $name && ! empty( $this->stack ) ) {
 				$this->stack[ count( $this->stack ) - 1 ][1] = 'featured';
 			}
@@ -1021,10 +1020,6 @@ final class Html_Optimizer {
 		$html = preg_replace( '/<script\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>\s*<\/script>[ \t]*\n?/i', '', $html );
 		$html = preg_replace( '/<link\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>[ \t]*\n?/i', '', $html );
 
-		if ( ! empty( $this->on['widget_css_async'] ) ) {
-			$html = $this->async_widget_css( $html );
-		}
-
 		$html = $this->insert_head( $html );
 		$html = $this->insert_body_end( $html );
 
@@ -1096,43 +1091,6 @@ final class Html_Optimizer {
 	}
 
 	/**
-	 * Load widget CSS for widgets that only appear below the first screen without blocking.
-	 *
-	 * @param string $html HTML.
-	 * @return string
-	 */
-	private function async_widget_css( $html ) {
-		$head_end = stripos( $html, '</head>' );
-		if ( false === $head_end ) {
-			return $html;
-		}
-		$head = substr( $html, 0, $head_end );
-		$head = preg_replace_callback(
-			'/<link\b[^>]*\bid=["\']widget-([a-z0-9-]+)-css["\'][^>]*>/i',
-			function ( $m ) {
-				$name = strtolower( $m[1] );
-				if ( isset( $this->first_screen_widgets[ $name ] ) || ! isset( $this->widget_types[ $name ] ) ) {
-					return $m[0];
-				}
-				$t = new \WP_HTML_Tag_Processor( $m[0] );
-				if ( ! $t->next_tag( 'LINK' ) || 'stylesheet' !== strtolower( (string) $t->get_attribute( 'rel' ) ) ) {
-					return $m[0];
-				}
-				$media = strtolower( trim( (string) $t->get_attribute( 'media' ) ) );
-				if ( '' !== $media && 'all' !== $media ) {
-					return $m[0];
-				}
-				$t->set_attribute( 'media', 'print' );
-				$t->set_attribute( 'onload', "this.media='all'" );
-				$this->count( 'async_css' );
-				return $t->get_updated_html();
-			},
-			$head
-		);
-		return $head . substr( $html, $head_end );
-	}
-
-	/**
 	 * Early head tags: preconnects, font preloads, our CSS and the delayed-script loader.
 	 *
 	 * @param string $html HTML.
@@ -1162,7 +1120,7 @@ final class Html_Optimizer {
 			$css .= Assets::youtube_css();
 		}
 		if ( ! empty( $this->on['toc_prefill'] ) && $this->has_toc ) {
-			$css .= Assets::toc_css( Toc::mobile_max_width() );
+			$css .= Assets::toc_css( Toc::mobile_max_width(), $this->toc_collapsed > 0 );
 		}
 		if ( $this->lazy_bg > 0 ) {
 			$css .= Assets::lazy_bg_css();
@@ -1208,6 +1166,9 @@ final class Html_Optimizer {
 		}
 		if ( $this->held_recaptcha ) {
 			$scripts .= '<script id="shd-perf-recaptcha">' . Assets::script( 'recaptcha' ) . "</script>\n";
+		}
+		if ( $this->toc_collapsed ) {
+			$scripts .= '<script id="shd-perf-toc">' . Assets::script( 'toc' ) . "</script>\n";
 		}
 		if ( $this->lazy_bg > 0 ) {
 			$this->count( 'lazy_backgrounds', $this->lazy_bg );

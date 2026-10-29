@@ -3,11 +3,12 @@
  * Run the HTML optimizer over saved pages and check that nothing is lost.
  *
  * Usage (inside a WordPress install with the plugin active):
- *   wp eval-file tests/optimize-fixtures.php <fixtures-dir> <output-dir> [all|live|nodelay]
+ *   wp eval-file tests/optimize-fixtures.php <fixtures-dir> <output-dir> [all|live|nodelay|all-<feature>,<feature>]
  *
  * "all" enables every feature (Live and Test); "live" only the features that
  * are Live by default; "nodelay" everything except "Start all non-essential
- * JavaScript on the first interaction". For each page it prints timing and
+ * JavaScript on the first interaction"; "all-<feature>,..." everything except
+ * the listed features (ids as in Settings::features()). For each page it prints timing and
  * counters, and checks:
  * visible text unchanged, balanced script tags, no leftover removal markers,
  * no element still hidden by an entrance animation, every facade placed (only
@@ -30,17 +31,20 @@ $in   = isset( $args[0] ) ? rtrim( $args[0], '/' ) : '';
 $out  = isset( $args[1] ) ? rtrim( $args[1], '/' ) : '';
 $mode = isset( $args[2] ) ? $args[2] : 'all';
 if ( ! is_dir( $in ) || '' === $out ) {
-	fwrite( STDERR, "Usage: wp eval-file tests/optimize-fixtures.php <fixtures-dir> <output-dir> [all|live|nodelay]\n" );
+	fwrite( STDERR, "Usage: wp eval-file tests/optimize-fixtures.php <fixtures-dir> <output-dir> [all|live|nodelay|all-<feature>,<feature>]\n" );
 	exit( 1 );
 }
 wp_mkdir_p( $out );
 
 $features = array();
+$without  = 0 === strpos( $mode, 'all-' ) ? explode( ',', substr( $mode, 4 ) ) : array();
 foreach ( Settings::features() as $id => $feature ) {
 	if ( 'all' === $mode ) {
 		$features[ $id ] = true;
 	} elseif ( 'nodelay' === $mode ) {
 		$features[ $id ] = 'delay_all_scripts' !== $id;
+	} elseif ( $without ) {
+		$features[ $id ] = ! in_array( $id, $without, true );
 	} else {
 		$features[ $id ] = 'live' === $feature['default'];
 	}
@@ -131,6 +135,13 @@ function shd_test_parse_error( $html ) {
 	return null === $error ? '' : (string) $error;
 }
 
+// SHD_TEST_SETTINGS='{"toc_phones":"collapsed"}' overrides settings for this run.
+$settings = Settings::get();
+$override = json_decode( (string) getenv( 'SHD_TEST_SETTINGS' ), true );
+if ( is_array( $override ) ) {
+	$settings = array_merge( $settings, $override );
+}
+
 $failures = 0;
 $files    = glob( $in . '/*.html' );
 sort( $files );
@@ -140,7 +151,7 @@ foreach ( $files as $file ) {
 	$html = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 
 	$start     = microtime( true );
-	$optimizer = new Html_Optimizer( $features, Settings::get(), true );
+	$optimizer = new Html_Optimizer( $features, $settings, true );
 	$result    = $optimizer->optimize( $html );
 	$elapsed   = ( microtime( true ) - $start ) * 1000;
 	file_put_contents( $out . '/' . $name, $result ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
@@ -168,7 +179,7 @@ foreach ( $files as $file ) {
 	if ( false !== strpos( $result, Html_Optimizer::REMOVE_MARK ) ) {
 		$problems[] = 'removal marker left behind';
 	}
-	if ( ! empty( $features['animations'] ) && 'all' === Settings::get()['animation_mode'] && false !== strpos( $result, 'elementor-invisible' ) ) {
+	if ( ! empty( $features['animations'] ) && 'all' === $settings['animation_mode'] && false !== strpos( $result, 'elementor-invisible' ) ) {
 		$problems[] = 'elementor-invisible left';
 	}
 	// Element counts outside scripts (script text may legitimately be re-encoded).
@@ -191,6 +202,9 @@ foreach ( $files as $file ) {
 		$expected = substr_count( $markup_before, $tag );
 		if ( '<img' === $tag || '<svg' === $tag ) {
 			$expected += $facades;
+			if ( '<svg' === $tag ) {
+				$expected += substr_count( $markup_after, 'data-shd-toc-toggle' ); // Arrow icon of each table of contents button.
+			}
 		} elseif ( '<iframe' === $tag ) {
 			$expected -= $iframe_facades;
 		}

@@ -139,7 +139,7 @@ final class Checklist {
 				'id'    => 'font-icons',
 				'group' => __( 'Fonts and icons', 'shd-performance' ),
 				'title' => __( 'Switch Elementor icons to inline SVG', 'shd-performance' ),
-				'why'   => __( 'Removes 4 Font Awesome stylesheets and about 170 KB of icon fonts from every page.', 'shd-performance' ),
+				'why'   => __( 'Removes 4 Font Awesome stylesheets and about 170 KB of icon fonts from every page. On phones these fonts download at the same time as the main image and slow it down, and icons such as the menu button stay invisible until they have arrived.', 'shd-performance' ),
 				'steps' => array(
 					__( 'Elementor → Settings → Features (or Performance): set “Inline Font Icons” to Active and save.', 'shd-performance' ),
 					__( 'Check the icons in the header, footer, buttons and icon lists. Custom CSS that targets “i.fa-…” elements may need to target “svg.e-font-icon-svg” instead.', 'shd-performance' ),

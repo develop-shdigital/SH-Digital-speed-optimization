@@ -177,6 +177,20 @@ final class Settings {
 				'title'   => __( 'Connect early to required third parties', 'shd-performance' ),
 				'fixes'   => __( 'Adds preconnect hints for third-party scripts that still load during page load (for example CookieFirst).', 'shd-performance' ),
 			),
+			'a11y_names'          => array(
+				'group'   => 'agents',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'Names for icon-only links, correct list roles', 'shd-performance' ),
+				'fixes'   => __( 'The menu button in the header, the close button of the menu and the back-to-top arrow are links that contain only an icon, so screen readers, AI agents and Lighthouse (“Links must have discernible text”) find no name for them. They now get one from what they do, in the language of the site: “Menü öffnen”, “Menü schliessen”, “Nach oben”, a phone number, an e-mail address, the social network or the title of the linked page. Elementor Pro also marks its loop grid and loop carousel as a list without list items (“Certain ARIA roles must contain particular children”): the cards of a grid become list items and the carousel, whose slides are labelled as slides, loses the wrong list role. Nothing visible changes.', 'shd-performance' ),
+			),
+			'agent_probes'        => array(
+				'group'   => 'agents',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'Answer AI catalogue look-ups at once', 'shd-performance' ),
+				'fixes'   => __( 'Lighthouse (“Agentic browsing”) and AI agents look for /.well-known/ard.json and /.well-known/ai-catalog.json, files this site does not publish. WordPress needed about 2 seconds to build its “page not found” page for them, longer than Lighthouse waits, so the check failed with “Catalogue file could not be loaded”. They now get a short “not found” immediately and the check counts as not applicable. Switch this off only if another plugin publishes such a catalogue.', 'shd-performance' ),
+			),
 			'rum'                 => array(
 				'group'   => 'monitoring',
 				'default' => 'live',

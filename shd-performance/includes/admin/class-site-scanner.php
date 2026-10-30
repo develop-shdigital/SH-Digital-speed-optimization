@@ -150,9 +150,10 @@ final class Site_Scanner {
 	 * Largest image files in the media library.
 	 *
 	 * @param int $limit Rows.
+	 * @param int $min   Smallest file size listed, in bytes.
 	 * @return array
 	 */
-	private static function large_images( $limit = 25 ) {
+	public static function large_images( $limit = 25, $min = 204800 ) {
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$rows   = $wpdb->get_results(
@@ -172,7 +173,7 @@ final class Site_Scanner {
 				$file = get_attached_file( (int) $row['ID'] );
 				$size = ( $file && is_readable( $file ) ) ? (int) filesize( $file ) : 0;
 			}
-			if ( $size < 200 * KB_IN_BYTES ) {
+			if ( $size < $min ) {
 				continue;
 			}
 			$images[] = array(

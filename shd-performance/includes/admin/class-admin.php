@@ -16,7 +16,7 @@ final class Admin {
 	const NOTICE = 'shd_perf_notice_';
 
 	/** Form actions, each handled by do_{name}() behind a capability and nonce check. */
-	const ACTIONS = array( 'save', 'promote', 'reset', 'purge', 'cache_save', 'cache_preload', 'profile', 'fonts_detect', 'fonts_upload', 'fonts_remove', 'fonts_preload', 'task', 'token', 'scan', 'health', 'export', 'import', 'clear_error' );
+	const ACTIONS = array( 'save', 'promote', 'reset', 'purge', 'cache_save', 'cache_preload', 'profile', 'fonts_detect', 'fonts_upload', 'fonts_remove', 'fonts_preload', 'media_lighter', 'media_upload', 'media_undo', 'media_cleanup', 'task', 'token', 'scan', 'health', 'export', 'import', 'clear_error' );
 
 	/** @var Admin|null */
 	private static $instance = null;
@@ -41,6 +41,41 @@ final class Admin {
 		foreach ( self::ACTIONS as $action ) {
 			add_action( 'admin_post_shd_perf_' . $action, array( $this, 'dispatch' ) );
 		}
+		add_filter( 'media_row_actions', array( $this, 'media_row_action' ), 10, 2 );
+		add_filter( 'attachment_fields_to_edit', array( $this, 'media_field' ), 10, 2 );
+	}
+
+	/**
+	 * Media Library (list view): "Replace file" under each image.
+	 *
+	 * @param string[] $actions Row actions.
+	 * @param \WP_Post $post    Attachment.
+	 * @return string[]
+	 */
+	public function media_row_action( $actions, $post ) {
+		if ( current_user_can( self::CAP ) && Media_Replace::can_replace( $post->ID ) ) {
+			$actions['shd_replace'] = '<a href="' . esc_url( self::url( 'images', array( 'attachment' => $post->ID ) ) ) . '">' . esc_html__( 'Replace file', 'shd-performance' ) . '</a>';
+		}
+		return $actions;
+	}
+
+	/**
+	 * Media Library (grid view and edit screen): a "Replace file" field in the details.
+	 *
+	 * @param array    $fields Fields.
+	 * @param \WP_Post $post   Attachment.
+	 * @return array
+	 */
+	public function media_field( $fields, $post ) {
+		if ( current_user_can( self::CAP ) && Media_Replace::can_replace( $post->ID ) ) {
+			$fields['shd_replace'] = array(
+				'label' => __( 'Replace file', 'shd-performance' ),
+				'input' => 'html',
+				'html'  => '<a class="button" href="' . esc_url( self::url( 'images', array( 'attachment' => $post->ID ) ) ) . '">' . esc_html__( 'Make lighter or replace…', 'shd-performance' ) . '</a>',
+				'helps' => __( 'Keeps this image (same ID, title and alt text); every page that uses it shows the new file.', 'shd-performance' ),
+			);
+		}
+		return $fields;
 	}
 
 	/**
@@ -343,6 +378,70 @@ final class Admin {
 		$this->back( 'fonts', 'success', __( 'Preload selection saved.', 'shd-performance' ) . ' ' . self::purge_note( Cache::purge_all() ) );
 	}
 
+	private function do_media_lighter() {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce checked in dispatch().
+		$id      = isset( $_POST['attachment'] ) ? absint( $_POST['attachment'] ) : 0;
+		$quality = isset( $_POST['quality'] ) ? (int) $_POST['quality'] : Media_Replace::QUALITY;
+		// phpcs:enable
+		if ( ! in_array( $quality, Media_Replace::QUALITIES, true ) ) {
+			$quality = Media_Replace::QUALITY;
+		}
+		$this->replaced( $id, Media_Replace::make_lighter( $id, $quality ) );
+	}
+
+	private function do_media_upload() {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce checked in dispatch().
+		$id   = isset( $_POST['attachment'] ) ? absint( $_POST['attachment'] ) : 0;
+		$file = isset( $_FILES['shd_file'] ) && is_array( $_FILES['shd_file'] ) ? $_FILES['shd_file'] : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- checked by wp_handle_upload().
+		// phpcs:enable
+		$this->replaced( $id, Media_Replace::replace_with_upload( $id, $file ) );
+	}
+
+	/**
+	 * @param int             $id     Attachment ID.
+	 * @param array|\WP_Error $result Result of the replacement.
+	 */
+	private function replaced( $id, $result ) {
+		if ( is_wp_error( $result ) ) {
+			$this->back( 'images', 'error', $result->get_error_message(), array( 'attachment' => $id ) );
+		}
+		$kept  = count( wp_list_filter( $result['places'], array( 'kept' => true ) ) );
+		$saved = $result['old_bytes'] > 0 ? round( 100 * ( 1 - $result['new_bytes'] / $result['old_bytes'] ) ) : 0;
+		$message = sprintf(
+			/* translators: 1: old size, 2: new size, 3: percent saved, 4: number of places */
+			_n( 'Replaced: %1$s → %2$s (%3$d%% lighter). Updated in %4$d place; Elementor’s CSS and the page cache were cleared.', 'Replaced: %1$s → %2$s (%3$d%% lighter). Updated in %4$d places; Elementor’s CSS and the page cache were cleared.', count( $result['places'] ) - $kept, 'shd-performance' ),
+			size_format( $result['old_bytes'] ),
+			size_format( $result['new_bytes'] ),
+			max( 0, $saved ),
+			count( $result['places'] ) - $kept
+		);
+		if ( $kept > 0 ) {
+			/* translators: %d: number of places */
+			$message .= ' ' . sprintf( _n( '%d place could not be changed automatically and still shows the old file, which is kept.', '%d places could not be changed automatically and still show the old file, which is kept.', $kept, 'shd-performance' ), $kept );
+		}
+		$this->back( 'images', 'success', $message, array( 'attachment' => $id ) );
+	}
+
+	private function do_media_undo() {
+		$id     = isset( $_POST['attachment'] ) ? absint( $_POST['attachment'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce checked in dispatch().
+		$result = Media_Replace::undo( $id );
+		if ( is_wp_error( $result ) ) {
+			$this->back( 'images', 'error', $result->get_error_message(), array( 'attachment' => $id ) );
+		}
+		/* translators: %d: number of places */
+		$this->back( 'images', 'success', sprintf( _n( 'Undone: the image uses its earlier file again, in %d place too.', 'Undone: the image uses its earlier file again, in %d places too.', count( $result['places'] ), 'shd-performance' ), count( $result['places'] ) ), array( 'attachment' => $id ) );
+	}
+
+	private function do_media_cleanup() {
+		$id     = isset( $_POST['attachment'] ) ? absint( $_POST['attachment'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce checked in dispatch().
+		$result = Media_Replace::delete_old_files( $id );
+		if ( is_wp_error( $result ) ) {
+			$this->back( 'images', 'error', $result->get_error_message(), array( 'attachment' => $id ) );
+		}
+		/* translators: 1: number of files, 2: size */
+		$this->back( 'images', 'success', sprintf( __( 'Deleted %1$d old files (%2$s).', 'shd-performance' ), $result['deleted'], size_format( $result['bytes'] ) ), array( 'attachment' => $id ) );
+	}
+
 	private function do_task() {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce checked in dispatch().
 		$id   = isset( $_POST['task'] ) ? sanitize_key( wp_unslash( $_POST['task'] ) ) : '';
@@ -528,6 +627,7 @@ final class Admin {
 			'checklist' => __( 'Checklist', 'shd-performance' ),
 			'features'  => __( 'Optimizations', 'shd-performance' ),
 			'cache'     => __( 'Page cache', 'shd-performance' ),
+			'images'    => __( 'Images', 'shd-performance' ),
 			'fonts'     => __( 'Fonts', 'shd-performance' ),
 			'vitals'    => __( 'Web Vitals', 'shd-performance' ),
 			'tools'     => __( 'Tools', 'shd-performance' ),
@@ -1013,6 +1113,7 @@ final class Admin {
 			'javascript'  => __( 'JavaScript', 'shd-performance' ),
 			'fonts'       => __( 'Fonts', 'shd-performance' ),
 			'layout'      => __( 'Layout stability', 'shd-performance' ),
+			'agents'      => __( 'Accessibility and AI agents', 'shd-performance' ),
 			'monitoring'  => __( 'Monitoring', 'shd-performance' ),
 		);
 		$labels   = array(
@@ -1249,6 +1350,206 @@ final class Admin {
 		$this->lines_row( 'cache_exclude', __( 'Never cache', 'shd-performance' ), $settings['cache_exclude'], __( 'One address path per line, for example /kontakt/ (also excludes the pages below it). * matches anything, for example /blog/*/print/.', 'shd-performance' ) );
 		echo '</tbody></table>';
 		echo '<p class="submit"><button type="submit" class="button button-primary">' . esc_html__( 'Save page cache settings', 'shd-performance' ) . '</button></p></form>';
+	}
+
+	/* ------------------------------------------------------------------
+	 * Images
+	 * ------------------------------------------------------------------ */
+
+	private function tab_images() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- navigation only.
+		$id = isset( $_GET['attachment'] ) ? absint( $_GET['attachment'] ) : 0;
+		if ( $id > 0 ) {
+			$this->image_screen( $id );
+			return;
+		}
+
+		echo '<div class="shd-intro"><p>' . esc_html__( 'Replace the file of an image once, here, instead of choosing a new picture in every page. The image keeps its place in the media library (same ID, title, alt text and caption); WordPress makes its sizes again, and every page, Elementor template, header, footer and setting that links to it is switched to the new file. Elementor’s CSS and the page cache are cleared automatically. The old files stay on the server until you delete them, so each replacement can be undone.', 'shd-performance' ) . '</p>';
+		echo '<p>' . esc_html__( '“Make lighter” turns the current file into a WebP file with the same width and height. At quality 90 it looks the same as the original; photos saved as PNG usually become 80–90% smaller, JPEG files 20–40%. You compare both before anything changes. Or upload a file you prepared yourself.', 'shd-performance' ) . '</p></div>';
+
+		$images = Site_Scanner::large_images( 40, 150 * KB_IN_BYTES );
+		echo '<h2>' . esc_html__( 'Largest image files', 'shd-performance' ) . '</h2>';
+		if ( empty( $images ) ) {
+			echo '<p>' . esc_html__( 'No image file over 150 KB.', 'shd-performance' ) . '</p>';
+		} else {
+			echo '<table class="widefat striped shd-table shd-images"><thead><tr><th><span class="screen-reader-text">' . esc_html__( 'Preview', 'shd-performance' ) . '</span></th><th>' . esc_html__( 'File', 'shd-performance' ) . '</th><th>' . esc_html__( 'Dimensions', 'shd-performance' ) . '</th><th>' . esc_html__( 'Size', 'shd-performance' ) . '</th><th><span class="screen-reader-text">' . esc_html__( 'Action', 'shd-performance' ) . '</span></th></tr></thead><tbody>';
+			foreach ( $images as $image ) {
+				$file = (string) get_post_meta( (int) $image['id'], '_wp_attached_file', true );
+				printf(
+					'<tr><td>%1$s</td><td>%2$s<br><span class="description">%3$s</span></td><td>%4$s</td><td>%5$s</td><td><a class="button" href="%6$s">%7$s</a></td></tr>',
+					wp_get_attachment_image( (int) $image['id'], array( 60, 60 ), false, array( 'class' => 'shd-thumb', 'loading' => 'lazy' ) ),
+					esc_html( $image['file'] ),
+					esc_html( dirname( $file ) ),
+					esc_html( $image['width'] . ' × ' . $image['height'] ),
+					esc_html( size_format( (int) $image['bytes'] ) ),
+					esc_url( self::url( 'images', array( 'attachment' => (int) $image['id'] ) ) ),
+					esc_html__( 'Make lighter or replace', 'shd-performance' )
+				);
+			}
+			echo '</tbody></table>';
+		}
+
+		$replaced = get_posts(
+			array(
+				'post_type'      => 'attachment',
+				'post_status'    => 'inherit',
+				'posts_per_page' => 50,
+				'meta_key'       => Media_Replace::META, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'orderby'        => 'modified',
+				'fields'         => 'ids',
+			)
+		);
+		if ( ! empty( $replaced ) ) {
+			echo '<h2>' . esc_html__( 'Replaced images', 'shd-performance' ) . '</h2>';
+			echo '<table class="widefat striped shd-table shd-images"><thead><tr><th><span class="screen-reader-text">' . esc_html__( 'Preview', 'shd-performance' ) . '</span></th><th>' . esc_html__( 'File', 'shd-performance' ) . '</th><th>' . esc_html__( 'Before → after', 'shd-performance' ) . '</th><th>' . esc_html__( 'When', 'shd-performance' ) . '</th><th><span class="screen-reader-text">' . esc_html__( 'Action', 'shd-performance' ) . '</span></th></tr></thead><tbody>';
+			foreach ( $replaced as $rid ) {
+				$record = Media_Replace::record( (int) $rid );
+				if ( null === $record ) {
+					continue;
+				}
+				printf(
+					'<tr><td>%1$s</td><td>%2$s</td><td>%3$s</td><td>%4$s</td><td><a class="button" href="%5$s">%6$s</a></td></tr>',
+					wp_get_attachment_image( (int) $rid, array( 60, 60 ), false, array( 'class' => 'shd-thumb', 'loading' => 'lazy' ) ),
+					esc_html( wp_basename( $record['new']['file'] ) ),
+					esc_html( size_format( (int) $record['old']['bytes'] ) . ' → ' . size_format( (int) $record['new']['bytes'] ) ),
+					esc_html( self::when( (int) $record['time'] ) ),
+					esc_url( self::url( 'images', array( 'attachment' => (int) $rid ) ) ),
+					esc_html__( 'Details', 'shd-performance' )
+				);
+			}
+			echo '</tbody></table>';
+		}
+	}
+
+	/**
+	 * One image: where it is used, the lighter WebP version, an upload, and the last replacement.
+	 *
+	 * @param int $id Attachment ID.
+	 */
+	private function image_screen( $id ) {
+		echo '<p><a href="' . esc_url( self::url( 'images' ) ) . '">← ' . esc_html__( 'All images', 'shd-performance' ) . '</a></p>';
+		if ( ! Media_Replace::can_replace( $id ) ) {
+			echo '<div class="notice notice-error inline"><p>' . esc_html__( 'This is not an image file in the media library (SVG files and missing files cannot be replaced here).', 'shd-performance' ) . '</p></div>';
+			return;
+		}
+		$file   = (string) get_attached_file( $id );
+		$rel    = (string) get_post_meta( $id, '_wp_attached_file', true );
+		$meta   = wp_get_attachment_metadata( $id );
+		$width  = is_array( $meta ) && isset( $meta['width'] ) ? (int) $meta['width'] : 0;
+		$height = is_array( $meta ) && isset( $meta['height'] ) ? (int) $meta['height'] : 0;
+		$bytes  = (int) filesize( $file );
+		$record = Media_Replace::record( $id );
+
+		echo '<h2>' . esc_html( get_the_title( $id ) ) . '</h2>';
+		echo '<div class="shd-grid shd-grid--2">';
+
+		echo '<section class="shd-card">';
+		echo '<h2>' . esc_html__( 'Current file', 'shd-performance' ) . '</h2>';
+		echo '<p>' . wp_get_attachment_image( $id, 'medium', false, array( 'class' => 'shd-current' ) ) . '</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- core image markup.
+		echo '<table class="widefat striped shd-table"><tbody>';
+		echo '<tr><th scope="row">' . esc_html__( 'File', 'shd-performance' ) . '</th><td>' . esc_html( $rel ) . '</td></tr>';
+		echo '<tr><th scope="row">' . esc_html__( 'Dimensions', 'shd-performance' ) . '</th><td>' . esc_html( $width . ' × ' . $height ) . '</td></tr>';
+		echo '<tr><th scope="row">' . esc_html__( 'Size', 'shd-performance' ) . '</th><td>' . esc_html( size_format( $bytes ) . ' (' . get_post_mime_type( $id ) . ')' ) . '</td></tr>';
+		echo '</tbody></table>';
+		echo '<p><a href="' . esc_url( (string) wp_get_attachment_url( $id ) ) . '" target="_blank" rel="noopener">' . esc_html__( 'Open at full size', 'shd-performance' ) . '</a> · <a href="' . esc_url( admin_url( 'post.php?post=' . $id . '&action=edit' ) ) . '">' . esc_html__( 'Edit in the media library', 'shd-performance' ) . '</a></p>';
+
+		$places = Media_Replace::usage( $id );
+		echo '<h3>' . esc_html__( 'Used in', 'shd-performance' ) . '</h3>';
+		if ( empty( $places ) ) {
+			echo '<p>' . esc_html__( 'No page, template or setting links to this file directly. Where the image is chosen by its ID (for example a featured image shown by a theme template), the new file appears automatically.', 'shd-performance' ) . '</p>';
+		} else {
+			echo '<ul class="shd-list">';
+			$labels = array();
+			foreach ( $places as $place ) {
+				$key = $place['label'];
+				if ( isset( $labels[ $key ] ) ) {
+					continue;
+				}
+				$labels[ $key ] = true;
+				if ( count( $labels ) > 15 ) {
+					break;
+				}
+				echo '<li>' . ( '' !== $place['edit'] ? '<a href="' . esc_url( $place['edit'] ) . '">' . esc_html( $place['label'] ) . '</a>' : esc_html( $place['label'] ) ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		echo '</section>';
+
+		echo '<section class="shd-card">';
+		if ( null !== $record ) {
+			echo '<h2>' . esc_html__( 'Last replacement', 'shd-performance' ) . '</h2>';
+			echo '<p>' . esc_html(
+				sprintf(
+					/* translators: 1: time ago, 2: old file, 3: old size, 4: new file, 5: new size, 6: number of places */
+					__( '%1$s: %2$s (%3$s) was replaced by %4$s (%5$s), in %6$d places.', 'shd-performance' ),
+					self::when( (int) $record['time'] ),
+					wp_basename( $record['old']['file'] ),
+					size_format( (int) $record['old']['bytes'] ),
+					wp_basename( $record['new']['file'] ),
+					size_format( (int) $record['new']['bytes'] ),
+					(int) $record['places']
+				)
+			) . '</p>';
+			$old = Media_Replace::old_files( $id );
+			echo '<div class="shd-actions">';
+			if ( empty( $record['old_deleted'] ) && $record['new']['file'] === $rel ) {
+				$this->button( 'media_undo', __( 'Undo', 'shd-performance' ), array( 'attachment' => $id ), 'button', __( 'Switch every page back to the earlier file and delete the new one?', 'shd-performance' ) );
+			}
+			if ( ! empty( $old ) ) {
+				$this->button(
+					'media_cleanup',
+					/* translators: %d: number of files */
+					sprintf( _n( 'Delete the %d old file', 'Delete the %d old files', count( $old ), 'shd-performance' ), count( $old ) ),
+					array( 'attachment' => $id ),
+					'button',
+					__( 'Delete the earlier files from the server? The replacement can then no longer be undone. Links to them from other websites or old newsletters stop working.', 'shd-performance' )
+				);
+			}
+			echo '</div>';
+			if ( ! empty( $old ) ) {
+				echo '<p class="description">' . esc_html__( 'Keep the old files for a few days, until you have checked the pages. Search engines and old newsletters may still link to them.', 'shd-performance' ) . '</p>';
+			}
+		}
+
+		echo '<h2>' . esc_html__( 'Make lighter', 'shd-performance' ) . '</h2>';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- navigation only.
+		$quality = isset( $_GET['q'] ) ? (int) $_GET['q'] : Media_Replace::QUALITY;
+		$quality = in_array( $quality, Media_Replace::QUALITIES, true ) ? $quality : Media_Replace::QUALITY;
+		$preview = Media_Replace::preview( $id, $quality );
+		if ( is_wp_error( $preview ) ) {
+			echo '<p>' . esc_html( $preview->get_error_message() ) . '</p>';
+		} else {
+			$saved = $bytes > 0 ? (int) round( 100 * ( 1 - $preview['bytes'] / $bytes ) ) : 0;
+			echo '<div class="shd-compare">';
+			printf( '<figure><img src="%1$s" alt="" loading="lazy"><figcaption>%2$s</figcaption></figure>', esc_url( (string) wp_get_attachment_url( $id ) ), esc_html( sprintf( /* translators: %s: size */ __( 'Now: %s', 'shd-performance' ), size_format( $bytes ) ) ) );
+			printf( '<figure><img src="%1$s" alt="" loading="lazy"><figcaption>%2$s</figcaption></figure>', esc_url( $preview['url'] ), esc_html( sprintf( /* translators: 1: size, 2: quality */ __( 'WebP: %1$s (quality %2$d)', 'shd-performance' ), size_format( $preview['bytes'] ), $quality ) ) );
+			echo '</div>';
+			/* translators: 1: width, 2: height, 3: percent */
+			echo '<p>' . esc_html( sprintf( __( 'Same dimensions (%1$d × %2$d), %3$d%% smaller. Compare both at full size:', 'shd-performance' ), $preview['width'], $preview['height'], max( 0, $saved ) ) ) . ' <a href="' . esc_url( (string) wp_get_attachment_url( $id ) ) . '" target="_blank" rel="noopener">' . esc_html__( 'now', 'shd-performance' ) . '</a> · <a href="' . esc_url( $preview['url'] ) . '" target="_blank" rel="noopener">' . esc_html__( 'WebP', 'shd-performance' ) . '</a></p>';
+			echo '<form method="get" action="' . esc_url( admin_url( 'admin.php' ) ) . '" class="shd-inline-form"><input type="hidden" name="page" value="' . esc_attr( self::SLUG ) . '"><input type="hidden" name="tab" value="images"><input type="hidden" name="attachment" value="' . esc_attr( (string) $id ) . '">';
+			echo '<label>' . esc_html__( 'Quality', 'shd-performance' ) . ' <select name="q">';
+			foreach ( Media_Replace::QUALITIES as $q ) {
+				echo '<option value="' . esc_attr( (string) $q ) . '"' . selected( $q, $quality, false ) . '>' . esc_html( (string) $q . ( Media_Replace::QUALITY === $q ? ' – ' . __( 'recommended', 'shd-performance' ) : '' ) ) . '</option>';
+			}
+			echo '</select></label> <button type="submit" class="button">' . esc_html__( 'Show', 'shd-performance' ) . '</button></form>';
+			echo '<div class="shd-actions">';
+			if ( $saved >= 10 ) {
+				$this->button( 'media_lighter', __( 'Use the WebP version everywhere', 'shd-performance' ), array( 'attachment' => $id, 'quality' => $quality ), 'button button-primary' );
+			} else {
+				echo '<p>' . esc_html__( 'This file is already compact: WebP would not make it noticeably smaller.', 'shd-performance' ) . '</p>';
+			}
+			echo '</div>';
+		}
+
+		echo '<h2>' . esc_html__( 'Upload a new file', 'shd-performance' ) . '</h2>';
+		/* translators: 1: width, 2: height, 3: maximum upload size */
+		echo '<p>' . esc_html( sprintf( __( 'JPEG, PNG, WebP, AVIF or GIF. Ideally %1$d × %2$d pixels or larger, so the image stays sharp where it is shown large; pages keep their layout. Up to %3$s.', 'shd-performance' ), $width, $height, size_format( wp_max_upload_size() ) ) ) . '</p>';
+		$this->form_open( 'media_upload', true, 'shd-inline-form' );
+		echo '<input type="hidden" name="attachment" value="' . esc_attr( (string) $id ) . '">';
+		echo '<input type="file" name="shd_file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" required> ';
+		echo '<button type="submit" class="button">' . esc_html__( 'Upload and replace everywhere', 'shd-performance' ) . '</button></form>';
+		echo '</section>';
+		echo '</div>';
 	}
 
 	/* ------------------------------------------------------------------
@@ -1750,14 +2051,17 @@ final class Admin {
 			echo '<p>' . esc_html__( 'No image over 200 KB.', 'shd-performance' ) . '</p>';
 			return;
 		}
-		echo '<table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'File', 'shd-performance' ) . '</th><th>' . esc_html__( 'Dimensions', 'shd-performance' ) . '</th><th>' . esc_html__( 'Size', 'shd-performance' ) . '</th></tr></thead><tbody>';
+		echo '<p>' . esc_html__( 'Make them lighter or replace them on the Images tab: every page that uses an image shows the new file.', 'shd-performance' ) . '</p>';
+		echo '<table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'File', 'shd-performance' ) . '</th><th>' . esc_html__( 'Dimensions', 'shd-performance' ) . '</th><th>' . esc_html__( 'Size', 'shd-performance' ) . '</th><th><span class="screen-reader-text">' . esc_html__( 'Action', 'shd-performance' ) . '</span></th></tr></thead><tbody>';
 		foreach ( $scan['images'] as $image ) {
 			printf(
-				'<tr><td><a href="%1$s">%2$s</a></td><td>%3$s</td><td>%4$s</td></tr>',
+				'<tr><td><a href="%1$s">%2$s</a></td><td>%3$s</td><td>%4$s</td><td><a href="%5$s">%6$s</a></td></tr>',
 				esc_url( admin_url( 'post.php?post=' . (int) $image['id'] . '&action=edit' ) ),
 				esc_html( $image['file'] ),
 				esc_html( $image['width'] . ' × ' . $image['height'] ),
-				esc_html( size_format( (int) $image['bytes'] ) )
+				esc_html( size_format( (int) $image['bytes'] ) ),
+				esc_url( self::url( 'images', array( 'attachment' => (int) $image['id'] ) ) ),
+				esc_html__( 'Make lighter or replace', 'shd-performance' )
 			);
 		}
 		echo '</tbody></table>';

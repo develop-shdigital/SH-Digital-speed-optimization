@@ -32,6 +32,8 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | JavaScript blocks rendering and causes about 1 s of Total Blocking Time on mobile. | Defer all scripts, or start them on the first interaction (taps and form submits are replayed). | Test |
 | jQuery Migrate. | Removed. | Test |
 | No real-visitor data (Google has none for this site yet). | Cookieless Core Web Vitals measurement with a 75th-percentile dashboard. Automated browsers, including PageSpeed Insights' test runs, are not counted. | Live |
+| Lighthouse "Agentic browsing": the menu button, its close button and the back-to-top arrow are links with only an icon, and some links contain only an image, so they have no name. Elementor Pro marks its loop grid and testimonial carousel as lists without list items. | Names from what the link does, in the site's language ("Menü öffnen", "Nach oben", page titles…). Links with text are never renamed. Grid cards become list items; the carousel loses the wrong list role. | Live |
+| Lighthouse "Agentic browsing": "ai-catalog.json … could not be loaded". The site has no such catalogue, and WordPress needs about 2 s to build its 404 page, longer than Lighthouse waits. | /.well-known/ard.json and /.well-known/ai-catalog.json get a short 404 at once; the check then counts as not applicable. | Live |
 | WordPress needs about 2.5 s to build a page. Kadence Performance's cache missed on 62 of 63 pages for the first phone visitor, and its lazy-loading delayed the video cover on /google-ads-agentur/. | Its own page cache: one copy for phones and computers, sent by Apache in about 1 ms, refilled in the background, and cleared when you save in Elementor (see below). | On; takes over when Kadence Performance is deactivated |
 
 #### One design choice
@@ -73,7 +75,8 @@ Every feature can be set to **Off**, **Test** or **Live**:
   - WOFF2 fonts.
   - Inline SVG icons instead of the Font Awesome icon fonts.
   - Unused add-ons.
-  - Oversized image files and image sizes in widgets.
+  - Oversized image files (with the Images tab) and image sizes in widgets.
+  - Four images that push the page down while loading (layout shift up to 0.38 on /seo-spezialisten/ on computers), with the exact Elementor settings.
   - The autoplaying video on /google-ads-agentur/: Mute and Play On Mobile, so that it plays for every visitor.
   - The table of contents on phones (optional design choice).
   - Duplicate Google Analytics.
@@ -83,6 +86,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
   - Verification in PageSpeed Insights and with real-visitor data.
 - **Optimizations**: the feature switches and advanced settings.
 - **Page cache**: status, stored pages, clear and refill buttons, lifetime, campaign links and exclusions.
+- **Images**: the largest files, and for each image: where it is used, a lighter WebP version with the same dimensions to compare and use, or an upload. Every page, template and setting that uses the image switches to the new file (the image keeps its ID). Undo, and deleting the old files once nothing links to them. Also reachable from the Media Library ("Replace file").
 - **Fonts**: detected fonts, WOFF2 upload, preloads and the fallback metrics.
 - **Web Vitals**: LCP, INP, CLS, FCP and TTFB from real visits, per device and page. Automated browsers are not measured.
 - **Tools**: health checks, a page scan, cache purge, settings export/import, diagnostics, and **Where the build time goes**: one click builds a page on the server as a first-time visitor and shows the time per plugin, Elementor widget and shortcode, the database queries and requests to other servers, with what to do about the biggest items. Only that one request is measured.

@@ -77,6 +77,12 @@ final class Html_Optimizer {
 	private $held_recaptcha = false;
 	private $has_body       = false;
 
+	/** @var array<string,bool[]> Per link target, in page order: whether each such link has no text (see unnamed_links()). */
+	private $unnamed_links  = array();
+
+	/** @var array<string,int> Links seen so far, per target. */
+	private $links_seen     = array();
+
 	/** @var array<int,array{0:string,1:array<string,string>}> Cookie banner scripts started from the top of <body>. */
 	private $consent_moved  = array();
 
@@ -208,6 +214,7 @@ final class Html_Optimizer {
 		}
 
 		$this->has_body     = (bool) preg_match( '/<body\b/i', $html );
+		$this->unnamed_links = self::unnamed_links( $html );
 		// LA-Studio Kit adds its "dlicon" icon font stylesheet to every page with its widgets, but
 		// draws its icons as inline SVG; the font is only needed for class="dlicon …" elements.
 		$this->uses_dlicon = (bool) preg_match( '/class=["\'][^"\']*\bdlicon\b|(?:["\']|&quot;)dlicon\s/i', $html );
@@ -235,6 +242,9 @@ final class Html_Optimizer {
 		switch ( $tag ) {
 			case 'DIV':
 				$this->on_div( $p );
+				break;
+			case 'A':
+				$this->on_anchor( $p );
 				break;
 			case 'IMG':
 				$this->on_img( $p );
@@ -478,6 +488,7 @@ final class Html_Optimizer {
 	 * @param \WP_HTML_Tag_Processor $p Processor.
 	 */
 	private function on_div( $p ) {
+		$this->list_roles( $p );
 		$widget = $p->get_attribute( 'data-widget_type' );
 		if ( is_string( $widget ) && '' !== $widget ) {
 			$name = strtolower( strtok( $widget, '.' ) );
@@ -497,6 +508,186 @@ final class Html_Optimizer {
 			$this->facades[ $video['n'] ] = Youtube::facade_html( $video['id'], $video['settings'], $video['first'], (string) $this->s['youtube_label'] );
 			$this->pending_video          = null;
 		}
+	}
+
+	/**
+	 * Elementor Pro marks its loop grid and loop carousel as role="list" but not their
+	 * items. Grid cards become list items; the carousel, whose slides are groups
+	 * ("slide 1 of 10"), loses the list role.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function list_roles( $p ) {
+		if ( empty( $this->on['a11y_names'] ) ) {
+			return;
+		}
+		$n = count( $this->stack );
+		if ( $p->has_class( 'elementor-loop-container' ) && 'list' === $p->get_attribute( 'role' ) ) {
+			if ( $p->has_class( 'swiper' ) ) {
+				$p->remove_attribute( 'role' );
+				$this->count( 'list_roles' );
+			} elseif ( $n > 0 ) {
+				$this->stack[ $n - 1 ][1] = 'list';
+			}
+			return;
+		}
+		if ( $n >= 2 && 'list' === $this->stack[ $n - 2 ][1] && 'loop-item' === $p->get_attribute( 'data-elementor-type' ) && null === $p->get_attribute( 'role' ) ) {
+			$p->set_attribute( 'role', 'listitem' );
+			$this->count( 'list_roles' );
+		}
+	}
+
+	/**
+	 * For every link, in page order and per target: whether it contains no text at all
+	 * (only an icon, or an image without alt text). Content the tag processor does not
+	 * visit (comments, scripts, styles and other raw text) is left out, so the order
+	 * matches the links on_anchor() sees.
+	 *
+	 * @param string $html HTML.
+	 * @return array<string,bool[]>
+	 */
+	private static function unnamed_links( $html ) {
+		$html  = (string) preg_replace( '#<!--.*?-->|<(script|style|textarea|title|iframe|xmp|noembed|noframes)\b[^>]*>.*?</\1\s*>#is', '', $html );
+		$found = array();
+		if ( ! preg_match_all( '#<a\b([^>]*)>#i', $html, $tags, PREG_SET_ORDER | PREG_OFFSET_CAPTURE ) ) {
+			return $found;
+		}
+		foreach ( $tags as $tag ) {
+			if ( ! preg_match( '/\bhref\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))/i', $tag[1][0], $href ) ) {
+				continue;
+			}
+			$target = html_entity_decode( (string) end( $href ), ENT_QUOTES | ENT_HTML5 );
+			$from   = $tag[0][1] + strlen( $tag[0][0] );
+			$inner  = substr( $html, $from, 4000 );
+			if ( preg_match( '#</a\s*>|<a\b#i', $inner, $close, PREG_OFFSET_CAPTURE ) ) {
+				$inner = substr( $inner, 0, $close[0][1] );
+			}
+			// Text (also screen-reader text and SVG titles), an image with alt text or a labelled element names the link.
+			$named = preg_match( '/\b(?:aria-label|aria-labelledby|title)\s*=\s*(["\'])\s*[^"\'\s]/i', $tag[1][0] )
+				|| '' !== trim( html_entity_decode( wp_strip_all_tags( $inner ), ENT_QUOTES ), " \t\n\r\0\x0B\xC2\xA0" )
+				|| preg_match( '/<img\b[^>]*\balt\s*=\s*(["\'])\s*[^"\'\s]|\baria-label\s*=\s*(["\'])\s*[^"\'\s]/i', $inner );
+			$found[ $target ][] = ! $named;
+		}
+		return $found;
+	}
+
+	/**
+	 * Links that contain only an icon (Elementor icon widget, icon box) or only an image
+	 * without alt text give screen readers and AI agents no name. Name them after what
+	 * they do. Links with text are never renamed.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function on_anchor( $p ) {
+		$href = $p->get_attribute( 'href' );
+		if ( empty( $this->on['a11y_names'] ) || ! is_string( $href ) ) {
+			return;
+		}
+		$n                         = isset( $this->links_seen[ $href ] ) ? $this->links_seen[ $href ] + 1 : 0;
+		$this->links_seen[ $href ] = $n;
+		$unnamed                   = isset( $this->unnamed_links[ $href ][ $n ] ) ? $this->unnamed_links[ $href ][ $n ] : null;
+		// Elementor icon links never have text; elsewhere only links found to have none.
+		if ( ! ( true === $unnamed || ( null === $unnamed && $p->has_class( 'elementor-icon' ) ) ) || $p->has_class( 'elementor-social-icon' ) ) {
+			return;
+		}
+		foreach ( array( 'aria-label', 'aria-labelledby', 'title' ) as $attr ) {
+			$value = $p->get_attribute( $attr );
+			if ( is_string( $value ) && '' !== trim( $value ) ) {
+				return;
+			}
+		}
+		$name = self::link_name( $href );
+		if ( '' !== $name ) {
+			$p->set_attribute( 'aria-label', $name );
+			$this->count( 'link_names' );
+		}
+	}
+
+	/**
+	 * A name for an icon-only link, from its target, in the site's language.
+	 *
+	 * @param string $href Link target.
+	 * @return string Empty when nothing sensible can be said.
+	 */
+	public static function link_name( $href ) {
+		$locale = get_locale();
+		$de     = 0 === strpos( $locale, 'de' );
+		$ch     = 0 === strpos( $locale, 'de_CH' );
+		$target = rawurldecode( html_entity_decode( trim( $href ), ENT_QUOTES ) );
+		if ( '' === $target ) {
+			return '';
+		}
+		if ( preg_match( '/^#elementor-action:action=([a-z_]+):([a-z_]+)/i', $target, $m ) ) {
+			$action = strtolower( $m[1] . ':' . $m[2] );
+			$names  = array(
+				'off_canvas:open'   => $de ? 'Menü öffnen' : 'Open menu',
+				'off_canvas:close'  => $de ? ( $ch ? 'Menü schliessen' : 'Menü schließen' ) : 'Close menu',
+				'off_canvas:toggle' => $de ? 'Menü' : 'Menu',
+				'popup:open'        => $de ? 'Fenster öffnen' : 'Open dialog',
+				'popup:close'       => $de ? ( $ch ? 'Fenster schliessen' : 'Fenster schließen' ) : 'Close dialog',
+				'lightbox:open'     => $de ? ( $ch ? 'Bild vergrössern' : 'Bild vergrößern' ) : 'Enlarge image',
+			);
+			return isset( $names[ $action ] ) ? $names[ $action ] : '';
+		}
+		if ( in_array( strtolower( $target ), array( '#top', '#page', '#site-header', '#masthead' ), true ) ) {
+			return $de ? 'Nach oben' : 'Back to top';
+		}
+		if ( 0 === stripos( $target, 'tel:' ) ) {
+			return ( $de ? 'Anrufen: ' : 'Call ' ) . trim( substr( $target, 4 ) );
+		}
+		if ( 0 === stripos( $target, 'mailto:' ) ) {
+			return ( $de ? 'E-Mail an ' : 'Email ' ) . trim( (string) strtok( substr( $target, 7 ), '?' ) );
+		}
+		if ( '/' === substr( $target, 0, 1 ) && '//' !== substr( $target, 0, 2 ) ) {
+			// Relative to the site: complete it with the site's scheme and host.
+			$home   = wp_parse_url( home_url() );
+			$target = ( isset( $home['scheme'] ) ? $home['scheme'] : 'https' ) . '://' . ( isset( $home['host'] ) ? $home['host'] : '' ) . ( isset( $home['port'] ) ? ':' . $home['port'] : '' ) . $target;
+		}
+		$host = strtolower( (string) wp_parse_url( $target, PHP_URL_HOST ) );
+		if ( '' === $host ) {
+			return '';
+		}
+		if ( preg_match( '#/(?:login|log-in|signin|sign-in|anmelden|kundenlogin)(?:[/?\#.]|$)#i', (string) wp_parse_url( $target, PHP_URL_PATH ) ) ) {
+			return $de ? 'Anmelden' : 'Log in';
+		}
+		$networks = array(
+			'linkedin.com'  => 'LinkedIn',
+			'youtube.com'   => 'YouTube',
+			'youtu.be'      => 'YouTube',
+			'instagram.com' => 'Instagram',
+			'facebook.com'  => 'Facebook',
+			'x.com'         => 'X',
+			'twitter.com'   => 'X',
+			'tiktok.com'    => 'TikTok',
+			'xing.com'      => 'XING',
+			'wa.me'         => 'WhatsApp',
+			'whatsapp.com'  => 'WhatsApp',
+			'pinterest.com' => 'Pinterest',
+			'threads.net'   => 'Threads',
+			'bsky.app'      => 'Bluesky',
+			'github.com'    => 'GitHub',
+			'vimeo.com'     => 'Vimeo',
+		);
+		foreach ( $networks as $domain => $name ) {
+			if ( $host === $domain || '.' . $domain === substr( $host, -strlen( $domain ) - 1 ) ) {
+				return $name;
+			}
+		}
+		$home = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+		if ( $host === $home ) {
+			$path = (string) wp_parse_url( $target, PHP_URL_PATH );
+			if ( '' === trim( $path, '/' ) ) {
+				return $de ? 'Startseite' : 'Home';
+			}
+			$id = url_to_postid( $target );
+			if ( $id ) {
+				return wp_strip_all_tags( get_the_title( $id ) );
+			}
+			// Not a post (an archive, for example): the last part of the address.
+			$slug = (string) preg_replace( '/[-_]+/', ' ', rawurldecode( basename( untrailingslashit( $path ) ) ) );
+			return function_exists( 'mb_strtoupper' ) ? mb_strtoupper( mb_substr( $slug, 0, 1 ) ) . mb_substr( $slug, 1 ) : ucfirst( $slug );
+		}
+		return (string) preg_replace( '/^www\./', '', $host );
 	}
 
 	/**

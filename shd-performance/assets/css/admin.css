@@ -394,3 +394,46 @@
 		padding: 4px 16px 16px;
 	}
 }
+
+/* Images */
+
+.shd-images td {
+	vertical-align: middle;
+}
+
+.shd-thumb {
+	width: 60px;
+	height: 60px;
+	object-fit: cover;
+	border-radius: 3px;
+	display: block;
+}
+
+.shd-current {
+	max-width: 100%;
+	height: auto;
+}
+
+.shd-compare {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+
+.shd-compare figure {
+	margin: 0;
+}
+
+.shd-compare img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--shd-border);
+	background: repeating-conic-gradient(#f0f0f1 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+}
+
+.shd-compare figcaption {
+	font-size: 13px;
+	color: var(--shd-muted);
+	padding-top: 4px;
+}

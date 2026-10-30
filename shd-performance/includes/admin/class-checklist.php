@@ -189,12 +189,12 @@ final class Checklist {
 				'title' => __( 'Replace oversized image files (no visible quality loss)', 'shd-performance' ),
 				'why'   => __( 'The /resultate/ page alone loads about 3.5 MB more image data than needed (mockups of 450–740 KB each).', 'shd-performance' ),
 				'steps' => array(
-					__( 'For each file in the list on the Tools tab: export it at the largest size it is displayed, times two for sharp screens (rarely more than 1600 px wide), as WebP at quality 80–85 (visually lossless).', 'shd-performance' ),
-					__( 'Photos saved as PNG are 3–4 times larger than as WebP. Convert them too, for example the picture on /kontakt/ (628 × 647 px, 107 KB as PNG).', 'shd-performance' ),
-					__( 'Replace the file while keeping its URL (for example with the “Enable Media Replace” plugin), so no page needs editing.', 'shd-performance' ),
-					__( 'Keep the originals in your archive.', 'shd-performance' ),
+					__( 'Open the Images tab. It lists the largest files; open one with “Make lighter or replace”.', 'shd-performance' ),
+					__( '“Make lighter” shows a WebP version with the same width and height next to the original (quality 90; PNG photos usually become 80–90% smaller, JPEG files 20–40%). Compare both at full size, then press “Use the WebP version everywhere”. Every page, template, header, footer and setting that uses the image switches to the new file; Elementor’s CSS and the page cache are cleared automatically.', 'shd-performance' ),
+					__( 'Photos saved as PNG gain the most, for example the picture on /kontakt/ (628 × 647 px, 107 KB as PNG). If you prefer to export a file yourself (WebP at quality 80–85, at most twice the largest size it is shown at), use “Upload a new file” on the same page instead.', 'shd-performance' ),
+					__( 'Keep the old files for a few days while you check the pages (each replacement can be undone), then delete them on the image’s page.', 'shd-performance' ),
 				),
-				'links' => array( __( 'Tools tab', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=tools' ) ),
+				'links' => array( __( 'Images tab', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=images' ) ),
 				'auto'  => array( __CLASS__, 'auto_images' ),
 			),
 			array(
@@ -210,6 +210,19 @@ final class Checklist {
 					__( 'Logo: upload it as SVG (Safe SVG is installed) or as a PNG/WebP about 480 px wide, and use it in the header template’s Site Logo widget.', 'shd-performance' ),
 				),
 				'links' => array( __( 'Media library', 'shd-performance' ) => admin_url( 'upload.php' ) ),
+			),
+			array(
+				'id'    => 'layout-images',
+				'group' => __( 'Layout', 'shd-performance' ),
+				'title' => __( 'Give four images a fixed width, so they do not push the page down while loading', 'shd-performance' ),
+				'why'   => __( 'These image widgets have Width = 100% inside a container that centres or aligns its items, so their box has no width until the file has arrived. Then the picture appears and pushes everything below it down: Cumulative Layout Shift 0.38 on /seo-spezialisten/ on computers (PageSpeed showed 0.32), 0.28 on /resultate/ and 0.12 on /angebot/ on phones. A fixed width reserves the space from the start; the pages look exactly as before (checked on all four pages).', 'shd-performance' ),
+				'steps' => array(
+					__( '/seo-spezialisten/ and /sandro-huber/: the large picture above the “Folgen Sie uns auf YouTube” button. Click it → Advanced → Layout → Width: “Full Width (100%)”. Update.', 'shd-performance' ),
+					__( '/resultate/: the portrait at the top (freepik…portrait….webp). Advanced → Layout → Width: “Full Width (100%)”. Update.', 'shd-performance' ),
+					__( '/angebot/: service-section-2.webp and service-section-5.webp: Style → Width: switch the unit from % to px and enter 270 and 261 (their own width). service-section-4.webp: Advanced → Layout → Width: “Full Width (100%)”. Update.', 'shd-performance' ),
+					__( 'Rule of thumb for new pages: an Image widget with Width in % should either be “Full Width” in Advanced → Layout, or get its width in px.', 'shd-performance' ),
+					__( 'Then test /seo-spezialisten/ again in PageSpeed Insights (Desktop): Cumulative Layout Shift should be close to 0.', 'shd-performance' ),
+				),
 			),
 			array(
 				'id'       => 'toc-phones',
@@ -275,7 +288,7 @@ final class Checklist {
 				'title' => __( 'Fix the accessibility findings', 'shd-performance' ),
 				'why'   => __( 'Found by Lighthouse and the browser’s accessibility tree; they also count in the PageSpeed accessibility score.', 'shd-performance' ),
 				'steps' => array(
-					__( 'Header: the menu icon and the back-to-top icon are links without a name. In each Icon widget: Advanced → Attributes, add “aria-label|Menü öffnen” and “aria-label|Nach oben”.', 'shd-performance' ),
+					__( 'Done automatically (Optimizations → “Names for icon-only links, correct list roles”): the menu icon, its close button, the back-to-top icon and links that contain only an image get a name, and the loop grid and testimonial carousel get correct list roles. To use your own wording, add it in Elementor: Icon widget → Link options (gear icon) → Custom Attributes, for example “aria-label|Navigation öffnen”; the plugin keeps names that are already there.', 'shd-performance' ),
 					__( 'The “Skip to content” link points to #content, which does not exist: give the main content container the CSS ID “content” (Advanced → CSS ID) in the page and single templates.', 'shd-performance' ),
 					__( 'Homepage: “80+ Schweizer Betriebe vertrauen auf uns” is an H4 right after the H1; make it an H2 (style it the same) or a paragraph.', 'shd-performance' ),
 					__( 'Media library: give the logo a meaningful alternative text (for example “SH Digital”).', 'shd-performance' ),

@@ -28,6 +28,7 @@ final class Plugin {
 	}
 
 	public function boot() {
+		add_action( 'init', array( $this, 'answer_probe' ), 0 );
 		add_action( 'init', array( $this, 'init' ) );
 		// Late priority: page caches that buffer earlier wrap our buffer and store the optimized page.
 		add_action( 'template_redirect', array( $this, 'start_buffer' ), 9999 );
@@ -37,10 +38,31 @@ final class Plugin {
 		Page_Cache::register();
 		Youtube::register();
 		Rum::register();
+		Media_Replace::register();
 
 		if ( is_admin() && class_exists( __NAMESPACE__ . '\Admin' ) ) {
 			Admin::instance()->register();
 		}
+	}
+
+	/**
+	 * A request for an AI resource catalogue (Agentic Resource Discovery) that this site does
+	 * not publish gets a short 404 at once. Otherwise WordPress builds its full 404 page, which
+	 * takes longer than Lighthouse waits: its “Agentic browsing” check then reports the
+	 * catalogue as broken instead of not applicable.
+	 */
+	public function answer_probe() {
+		$uri  = isset( $_SERVER['REQUEST_URI'] ) ? strtolower( (string) strtok( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), '?' ) ) : '';
+		$base = trailingslashit( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ) );
+		if ( ! in_array( $uri, array( $base . '.well-known/ard.json', $base . '.well-known/ai-catalog.json' ), true ) || 'off' === Settings::state( 'agent_probes' ) ) {
+			return;
+		}
+		status_header( 404 );
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'Cache-Control: public, max-age=3600' );
+		header( 'X-Robots-Tag: noindex' );
+		echo "Not found\n";
+		exit;
 	}
 
 	public function init() {
@@ -219,6 +241,7 @@ final class Plugin {
 
 	public function daily() {
 		Rum::prune();
+		Media_Replace::clean_previews();
 		$uploads = wp_get_upload_dir();
 		foreach ( (array) glob( trailingslashit( $uploads['basedir'] ) . Css_Rewriter::CACHE_SUBDIR . '/*.css' ) as $file ) {
 			if ( is_string( $file ) && filemtime( $file ) < time() - 30 * DAY_IN_SECONDS ) {

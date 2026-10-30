@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,8 @@ Automatic optimizations (each one can be Off, Test or Live):
 * Fonts: font-display: swap, uploaded WOFF2 files, preloads and a size-matched fallback font.
 * The blog's table of contents is filled in from the start, so it no longer pushes the article down.
 * Real-visitor Core Web Vitals (LCP, INP, CLS, FCP, TTFB) are measured without cookies. Automated browsers, such as PageSpeed Insights' test runs, are not counted.
+* Icon-only links (menu button, its close button, back-to-top arrow) and links that contain only an image get a name in the site's language; Elementor Pro's loop grid and carousel get correct list roles. Fixes Lighthouse's "Agentic browsing" accessibility check.
+* Requests for an AI resource catalogue the site does not publish (/.well-known/ard.json, /.well-known/ai-catalog.json) get a short 404 at once, so Lighthouse counts the check as not applicable instead of failed.
 
 Page cache (replaces Kadence Performance):
 
@@ -36,6 +38,8 @@ Page cache (replaces Kadence Performance):
 * Cleared when content changes, including Elementor saves (pages, templates, site settings) and Elementor's "Clear Files & Data". Works together with Elementor's Element Cache.
 * Logged-in users, form submissions, password-protected posts, searches and addresses with parameters always get a fresh page. Ad and campaign links can optionally get the cached page.
 * Waits while Kadence Performance (or another page cache plugin) is active, and takes over when it is deactivated.
+
+Images tab: replace the file of an image once and every page, template, header, footer and setting that uses it shows the new file. "Make lighter" turns the current file into a WebP file with the same dimensions (compare before using it); or upload your own file. The image keeps its ID, title and alt text, Elementor's CSS and the page cache are cleared, and each replacement can be undone until the old files are deleted.
 
 The dashboard (SHD Performance in the admin menu) also contains health checks, a page scan, a measurement of where the server spends the time to build a page (per plugin, Elementor widget, shortcode, database query and request to other servers), and a step-by-step checklist for everything that has to be changed by hand: cache settings, server, fonts, plugins, images, tracking, accessibility and domain set-up.
 
@@ -61,11 +65,21 @@ No, they work together. Element Cache keeps rendered widgets in the database, bu
 
 As an administrator, open any page with `?shd-off=1`, or use "Show this page without optimizations" in the admin bar.
 
+= How do I replace an image on every page at once? =
+
+SHD Performance → Images (or "Replace file" in the Media Library). Choose "Use the WebP version everywhere" or upload a new file. The attachment keeps its ID; all links to the old file in pages, Elementor data, templates, settings and term meta are rewritten to the new file (serialized settings are unpacked and packed again). Values that hold PHP objects are left alone and listed. The old files stay on the server until you delete them on the image's page, so links from other websites keep working and the replacement can be undone.
+
 = Does the Web Vitals measurement use cookies? =
 
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.4.0 =
+* Images tab and "Replace file" in the Media Library: make an image lighter (WebP with the same dimensions, side-by-side comparison, quality 80–95) or upload a new file; every page, Elementor document, template, setting and term that links to the old files is switched to the new ones. Undo, and deleting the old files once nothing links to them.
+* Lighthouse "Agentic browsing": icon-only links and image-only links get a name (in German on a German site: "Menü öffnen", "Menü schliessen", "Nach oben", phone numbers, e-mail addresses, social networks, page titles); links with text are never renamed. Elementor Pro's loop grid items become list items and the loop carousel loses its wrong list role.
+* /.well-known/ard.json and /.well-known/ai-catalog.json get a short 404 at once instead of the 2-second 404 page, so the catalogue check no longer fails with "could not be loaded".
+* Checklist: the image task uses the Images tab; new task for four images that push the page down while loading (layout shift up to 0.38 on /seo-spezialisten/), with the exact Elementor settings; the accessibility task notes what is now automatic.
 
 = 1.3.0 =
 * Autoplaying self-hosted videos below the first screen (Elementor Video widget) download when a visitor scrolls near them instead of with the page. Their box keeps its size, so nothing moves. New feature "Start autoplaying videos further down when they come into view" (Live).

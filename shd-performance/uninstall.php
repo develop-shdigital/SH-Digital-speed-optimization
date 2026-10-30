@@ -20,6 +20,9 @@ $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}shd_perf_vitals" );
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_shd\\_perf\\_%' OR option_name LIKE '\\_transient\\_timeout\\_shd\\_perf\\_%'" );
 // phpcs:enable
 
+// Replaced images keep their new files; only the undo records go.
+delete_post_meta_by_key( '_shd_perf_replace' );
+
 wp_clear_scheduled_hook( 'shd_perf_daily' );
 wp_clear_scheduled_hook( 'shd_perf_youtube_meta' );
 wp_clear_scheduled_hook( 'shd_perf_cache_maintain' );

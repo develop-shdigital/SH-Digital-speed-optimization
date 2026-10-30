@@ -170,6 +170,7 @@ final class Checklist {
 				'steps'    => array(
 					__( 'Replace the map on /kontakt/ with Elementor’s own “Google Maps” widget (no API key, loads only when scrolled into view).', 'shd-performance' ),
 					__( 'Rebuild the timelines with Elementor containers and the Icon List widget, or keep LA-Studio for them.', 'shd-performance' ),
+					__( 'Replace the icons from LA-Studio’s “dlicon” library (on 35 pages, for example the date and reading-time icons on blog posts) with Font Awesome icons, or they disappear.', 'shd-performance' ),
 					__( 'LA-Studio also handles the transparent header; check the header on all breakpoints after deactivating it.', 'shd-performance' ),
 					__( 'The pages that use LA-Studio widgets are listed on the Tools tab.', 'shd-performance' ),
 				),

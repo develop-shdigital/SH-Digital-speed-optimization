@@ -3,7 +3,7 @@
  * Plugin Name:       SHD Performance
  * Plugin URI:        https://www.sh-digital.ch/
  * Description:       Speed and Core Web Vitals optimizations and a page cache for the SH Digital Elementor site, with a dashboard checklist for the steps that need a person.
- * Version:           1.2.0
+ * Version:           1.2.1
  * Requires at least: 6.7
  * Requires PHP:      7.4
  * Author:            SH Digital
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SHD_PERF_VERSION', '1.2.0' );
+define( 'SHD_PERF_VERSION', '1.2.1' );
 define( 'SHD_PERF_FILE', __FILE__ );
 define( 'SHD_PERF_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SHD_PERF_URL', plugin_dir_url( __FILE__ ) );

@@ -1603,9 +1603,30 @@ final class Admin {
 		printf( '<tr><td><em>%1$s</em></td><td>%2$s ms</td><td>%3$d%%</td></tr>', esc_html__( 'Not in a plugin hook (WordPress, templates, main query)', 'shd-performance' ), esc_html( number_format_i18n( max( 0, $total - $attributed ) ) ), (int) round( 100 * max( 0, $total - $attributed ) / $total ) );
 		echo '</tbody></table>';
 
+		// [elementor-element] is Elementor's Element Cache placeholder, not a shortcode on the pages.
+		$placeholder = null;
+		$shortcodes  = array();
+		foreach ( (array) $report['shortcodes'] as $shortcode ) {
+			if ( 'elementor-element' === $shortcode['tag'] ) {
+				$placeholder = $shortcode;
+			} else {
+				$shortcodes[] = $shortcode;
+			}
+		}
+
 		if ( ! empty( $report['elements'] ) ) {
 			echo '<h3>' . esc_html__( 'Elementor widgets', 'shd-performance' ) . '</h3>';
 			echo '<p class="description">' . esc_html__( 'Widgets that were built for this page (widgets served from Elementor’s Element Cache do not appear). “With content” includes the widgets inside, for example the post cards of a post list.', 'shd-performance' ) . '</p>';
+			if ( null !== $placeholder ) {
+				echo '<p class="description">' . esc_html(
+					sprintf(
+						/* translators: 1: number of widgets, 2: milliseconds */
+						__( 'Elementor’s Element Cache stores each page without the widgets whose content can change between visits: post lists, menus, post info, excerpts, forms, anything with a dynamic tag, and most add-on widgets. In their place it keeps an [elementor-element] placeholder and builds the widget again each time the page is built: %1$d placeholders on this page, %2$s ms with everything inside them. That time is already counted in this table; it is the part of the page that Elementor cannot store.', 'shd-performance' ),
+						(int) $placeholder['count'],
+						number_format_i18n( (int) ( isset( $placeholder['total_ms'] ) ? $placeholder['total_ms'] : $placeholder['ms'] ) )
+					)
+				) . '</p>';
+			}
 			echo '<table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Widget', 'shd-performance' ) . '</th><th>' . esc_html__( 'Plugin', 'shd-performance' ) . '</th><th>' . esc_html__( 'Count', 'shd-performance' ) . '</th><th>' . esc_html__( 'Own time', 'shd-performance' ) . '</th><th>' . esc_html__( 'With content', 'shd-performance' ) . '</th></tr></thead><tbody>';
 			foreach ( (array) $report['elements'] as $element ) {
 				printf( '<tr><td><code>%1$s</code></td><td>%2$s</td><td>%3$d</td><td>%4$s ms</td><td>%5$s ms</td></tr>', esc_html( $element['name'] ), esc_html( Profiler::label( $element['component'] ) ), (int) $element['count'], esc_html( number_format_i18n( $element['ms'] ) ), esc_html( number_format_i18n( $element['total_ms'] ) ) );
@@ -1613,9 +1634,9 @@ final class Admin {
 			echo '</tbody></table>';
 		}
 
-		if ( ! empty( $report['shortcodes'] ) ) {
+		if ( ! empty( $shortcodes ) ) {
 			echo '<h3>' . esc_html__( 'Shortcodes', 'shd-performance' ) . '</h3><table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Shortcode', 'shd-performance' ) . '</th><th>' . esc_html__( 'Plugin', 'shd-performance' ) . '</th><th>' . esc_html__( 'Count', 'shd-performance' ) . '</th><th>' . esc_html__( 'Own time', 'shd-performance' ) . '</th><th>' . esc_html__( 'With content', 'shd-performance' ) . '</th></tr></thead><tbody>';
-			foreach ( (array) $report['shortcodes'] as $shortcode ) {
+			foreach ( $shortcodes as $shortcode ) {
 				printf( '<tr><td><code>[%1$s]</code></td><td>%2$s</td><td>%3$d</td><td>%4$s ms</td><td>%5$s ms</td></tr>', esc_html( $shortcode['tag'] ), esc_html( Profiler::label( $shortcode['component'] ) ), (int) $shortcode['count'], esc_html( number_format_i18n( $shortcode['ms'] ) ), esc_html( number_format_i18n( isset( $shortcode['total_ms'] ) ? $shortcode['total_ms'] : $shortcode['ms'] ) ) );
 			}
 			echo '</tbody></table>';

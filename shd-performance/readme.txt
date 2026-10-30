@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,9 @@ As an administrator, open any page with `?shd-off=1`, or use "Show this page wit
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted.
 
 == Changelog ==
+
+= 1.2.1 =
+* Build-time report: [elementor-element] (the placeholder of Elementor's Element Cache for widgets it builds again on every visit) is explained with the widgets instead of being listed as a shortcode.
 
 = 1.2.0 =
 * Tools → "Where the build time goes": builds one page as a first-time visitor and shows the time per plugin, Elementor widget and shortcode, the database queries, requests to other servers and what to do about the biggest items. Only the measured request is affected.

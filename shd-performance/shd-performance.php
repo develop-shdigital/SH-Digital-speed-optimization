@@ -3,7 +3,7 @@
  * Plugin Name:       SHD Performance
  * Plugin URI:        https://www.sh-digital.ch/
  * Description:       Speed and Core Web Vitals optimizations and a page cache for the SH Digital Elementor site, with a dashboard checklist for the steps that need a person.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 6.7
  * Requires PHP:      7.4
  * Author:            SH Digital
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SHD_PERF_VERSION', '1.1.0' );
+define( 'SHD_PERF_VERSION', '1.2.0' );
 define( 'SHD_PERF_FILE', __FILE__ );
 define( 'SHD_PERF_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SHD_PERF_URL', plugin_dir_url( __FILE__ ) );
@@ -33,6 +33,7 @@ require_once SHD_PERF_DIR . 'includes/class-youtube.php';
 require_once SHD_PERF_DIR . 'includes/class-rum.php';
 require_once SHD_PERF_DIR . 'includes/class-cache.php';
 require_once SHD_PERF_DIR . 'includes/class-page-cache.php';
+require_once SHD_PERF_DIR . 'includes/class-profiler.php';
 require_once SHD_PERF_DIR . 'includes/class-plugin.php';
 
 if ( is_admin() ) {
@@ -45,4 +46,6 @@ if ( is_admin() ) {
 register_activation_hook( __FILE__, array( 'SHD\Performance\Plugin', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'SHD\Performance\Plugin', 'deactivate' ) );
 
+// Only for a page the dashboard measures (one-time token); does nothing otherwise.
+SHD\Performance\Profiler::maybe_start();
 SHD\Performance\Plugin::instance()->boot();

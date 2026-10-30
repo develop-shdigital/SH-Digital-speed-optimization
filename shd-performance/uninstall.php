@@ -11,7 +11,7 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 global $wpdb;
 
-foreach ( array( 'shd_perf_settings', 'shd_perf_checklist', 'shd_perf_health', 'shd_perf_scan', 'shd_perf_rum_db', 'shd_perf_last_error', 'shd_perf_cache_status', 'shd_perf_cache_queue', 'shd_perf_cache_key' ) as $shd_perf_option ) {
+foreach ( array( 'shd_perf_settings', 'shd_perf_checklist', 'shd_perf_health', 'shd_perf_scan', 'shd_perf_rum_db', 'shd_perf_last_error', 'shd_perf_cache_status', 'shd_perf_cache_queue', 'shd_perf_cache_key', 'shd_perf_profile' ) as $shd_perf_option ) {
 	delete_option( $shd_perf_option );
 }
 

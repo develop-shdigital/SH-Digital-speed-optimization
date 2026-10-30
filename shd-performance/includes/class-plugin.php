@@ -95,6 +95,7 @@ final class Plugin {
 		if ( ! ( $phase & PHP_OUTPUT_HANDLER_FINAL ) || ! is_string( $html ) || ! Html_Optimizer::is_document( $html ) || ! self::is_html_response() ) {
 			return $html;
 		}
+		$measure = Profiler::begin();
 		try {
 			$optimizer = new Html_Optimizer( self::active_features(), Settings::get(), self::allows_data_scripts() );
 			return $optimizer->optimize( $html );
@@ -109,6 +110,8 @@ final class Plugin {
 				false
 			);
 			return $html;
+		} finally {
+			Profiler::end( $measure, 'plugin:shd-performance' );
 		}
 	}
 

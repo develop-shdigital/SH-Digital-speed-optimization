@@ -16,7 +16,7 @@ final class Admin {
 	const NOTICE = 'shd_perf_notice_';
 
 	/** Form actions, each handled by do_{name}() behind a capability and nonce check. */
-	const ACTIONS = array( 'save', 'promote', 'reset', 'purge', 'cache_save', 'cache_preload', 'fonts_detect', 'fonts_upload', 'fonts_remove', 'fonts_preload', 'task', 'token', 'scan', 'health', 'export', 'import', 'clear_error' );
+	const ACTIONS = array( 'save', 'promote', 'reset', 'purge', 'cache_save', 'cache_preload', 'profile', 'fonts_detect', 'fonts_upload', 'fonts_remove', 'fonts_preload', 'task', 'token', 'scan', 'health', 'export', 'import', 'clear_error' );
 
 	/** @var Admin|null */
 	private static $instance = null;
@@ -200,6 +200,65 @@ final class Admin {
 				/* translators: %d: number of pages */
 				: sprintf( _n( '%d page is being cached in the background (about 10 pages per 30 seconds).', '%d pages are being cached in the background (about 10 pages per 30 seconds).', $count, 'shd-performance' ), $count )
 		);
+	}
+
+	private function do_profile() {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- nonce checked in dispatch().
+		$choice = isset( $_POST['page'] ) ? sanitize_key( wp_unslash( $_POST['page'] ) ) : 'home';
+		$path   = isset( $_POST['path'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['path'] ) ) ) : '';
+		// phpcs:enable
+		$url = self::profile_url( $choice, $path );
+		if ( '' === $url ) {
+			$this->back( 'tools', 'error', __( 'Enter the address of a page on this site, for example /blog/.', 'shd-performance' ), array(), 'profile' );
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 180 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$report = Profiler::run( $url );
+		if ( is_wp_error( $report ) ) {
+			$this->back( 'tools', 'error', $report->get_error_message(), array(), 'profile' );
+		}
+		/* translators: 1: page address, 2: milliseconds */
+		$this->back( 'tools', 'success', sprintf( __( '%1$s was built in %2$s ms on the server. Details below.', 'shd-performance' ), wp_make_link_relative( $url ), number_format_i18n( $report['total_ms'] ) ), array(), 'profile' );
+	}
+
+	/**
+	 * Page to measure: a preset or an address on this site.
+	 *
+	 * @param string $choice home|posts|post|custom.
+	 * @param string $path   Address or path for "custom".
+	 * @return string URL, or '' if invalid.
+	 */
+	private static function profile_url( $choice, $path ) {
+		if ( 'posts' === $choice && get_option( 'page_for_posts' ) ) {
+			return (string) get_permalink( (int) get_option( 'page_for_posts' ) );
+		}
+		if ( 'post' === $choice ) {
+			$latest = get_posts(
+				array(
+					'numberposts' => 1,
+					'post_status' => 'publish',
+					'fields'      => 'ids',
+				)
+			);
+			return empty( $latest ) ? '' : (string) get_permalink( (int) $latest[0] );
+		}
+		if ( 'custom' === $choice ) {
+			// A path, or a full address on this site.
+			$parts = wp_parse_url( $path );
+			if ( ! is_array( $parts ) || ( isset( $parts['scheme'] ) && ! in_array( strtolower( $parts['scheme'] ), array( 'http', 'https' ), true ) ) ) {
+				return '';
+			}
+			if ( isset( $parts['host'] ) && strtolower( $parts['host'] ) !== strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) ) {
+				return '';
+			}
+			$path = isset( $parts['path'] ) ? (string) $parts['path'] : '/';
+			if ( ! preg_match( '#^/?[^\s<>"\'\\\\:]*$#', $path ) ) {
+				return '';
+			}
+			return home_url( '/' . ltrim( $path, '/' ) );
+		}
+		return home_url( '/' );
 	}
 
 	private function do_fonts_detect() {
@@ -1422,6 +1481,7 @@ final class Admin {
 
 	private function tab_tools() {
 		$this->tools_health();
+		$this->tools_profile();
 		$this->tools_scan();
 
 		echo '<h2>' . esc_html__( 'Page cache', 'shd-performance' ) . '</h2>';
@@ -1482,6 +1542,122 @@ final class Admin {
 			echo '</td></tr>';
 		}
 		echo '</tbody></table>';
+	}
+
+	private function tools_profile() {
+		$report = Profiler::last();
+		echo '<h2 id="profile">' . esc_html__( 'Where the build time goes', 'shd-performance' ) . '</h2>';
+		echo '<p>' . esc_html__( 'Builds one page on this server the way a first-time visitor gets it without the page cache, and measures which plugins, Elementor widgets, shortcodes, database queries and requests to other servers take the time. Visitors are not affected. The page is built twice (the first build warms up the server), so this takes a few seconds.', 'shd-performance' ) . '</p>';
+		$this->form_open( 'profile', false, 'shd-actions' );
+		echo '<label for="shd-profile-page" class="screen-reader-text">' . esc_html__( 'Page', 'shd-performance' ) . '</label><select id="shd-profile-page" name="page">';
+		$options = array( 'home' => __( 'Homepage', 'shd-performance' ) );
+		if ( get_option( 'page_for_posts' ) ) {
+			$options['posts'] = __( 'Blog (posts page)', 'shd-performance' );
+		}
+		$options['post']   = __( 'Latest post', 'shd-performance' );
+		$options['custom'] = __( 'Other address:', 'shd-performance' );
+		foreach ( $options as $value => $label ) {
+			printf( '<option value="%1$s">%2$s</option>', esc_attr( $value ), esc_html( $label ) );
+		}
+		echo '</select> <input type="text" name="path" class="regular-text" placeholder="/blog/" aria-label="' . esc_attr__( 'Other address', 'shd-performance' ) . '"> ';
+		echo '<button type="submit" class="button button-primary">' . esc_html__( 'Measure', 'shd-performance' ) . '</button></form>';
+		if ( null === $report ) {
+			return;
+		}
+
+		$total = max( 1, (int) $report['total_ms'] );
+		echo '<p><strong>' . esc_html( wp_make_link_relative( $report['url'] ) ) . '</strong>: ' . esc_html(
+			sprintf(
+				/* translators: 1: milliseconds, 2: time ago, 3: PHP version, 4: OPcache on/off, 5: object cache yes/no, 6: memory */
+				__( 'built in %1$s ms on the server (measured %2$s). PHP %3$s, OPcache %4$s, persistent object cache %5$s, %6$s MB memory.', 'shd-performance' ),
+				number_format_i18n( $total ),
+				self::when( (int) $report['time'] ),
+				$report['env']['php'],
+				$report['env']['opcache'] ? __( 'on', 'shd-performance' ) : __( 'off', 'shd-performance' ),
+				$report['env']['object_cache'] ? __( 'yes', 'shd-performance' ) : __( 'no', 'shd-performance' ),
+				number_format_i18n( (float) $report['env']['memory_mb'], 1 )
+			)
+		) . '</p>';
+
+		$hints = Profiler::hints( $report );
+		if ( ! empty( $hints ) ) {
+			echo '<div class="shd-card"><h3>' . esc_html__( 'What to do', 'shd-performance' ) . '</h3><ol class="shd-steps">';
+			foreach ( $hints as $hint ) {
+				echo '<li>' . esc_html( $hint ) . '</li>';
+			}
+			echo '</ol></div>';
+		}
+
+		// Time by plugin.
+		echo '<h3>' . esc_html__( 'Time by plugin', 'shd-performance' ) . '</h3>';
+		echo '<p class="description">' . esc_html__( 'Time spent in each plugin’s own code (its hooks, widgets and shortcodes; nested calls are counted where they belong). The rest is WordPress itself, the theme’s template files and the main database query.', 'shd-performance' ) . '</p>';
+		echo '<table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Plugin or theme', 'shd-performance' ) . '</th><th>' . esc_html__( 'Time', 'shd-performance' ) . '</th><th>' . esc_html__( 'Share', 'shd-performance' ) . '</th></tr></thead><tbody>';
+		$attributed = 0;
+		foreach ( (array) $report['components'] as $component => $ms ) {
+			$attributed += (int) $ms;
+			if ( $ms < 1 ) {
+				continue;
+			}
+			printf( '<tr><td>%1$s</td><td>%2$s ms</td><td>%3$d%%</td></tr>', esc_html( Profiler::label( $component ) ), esc_html( number_format_i18n( $ms ) ), (int) round( 100 * $ms / $total ) );
+		}
+		printf( '<tr><td><em>%1$s</em></td><td>%2$s ms</td><td>%3$d%%</td></tr>', esc_html__( 'Not in a plugin hook (WordPress, templates, main query)', 'shd-performance' ), esc_html( number_format_i18n( max( 0, $total - $attributed ) ) ), (int) round( 100 * max( 0, $total - $attributed ) / $total ) );
+		echo '</tbody></table>';
+
+		if ( ! empty( $report['elements'] ) ) {
+			echo '<h3>' . esc_html__( 'Elementor widgets', 'shd-performance' ) . '</h3>';
+			echo '<p class="description">' . esc_html__( 'Widgets that were built for this page (widgets served from Elementor’s Element Cache do not appear). “With content” includes the widgets inside, for example the post cards of a post list.', 'shd-performance' ) . '</p>';
+			echo '<table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Widget', 'shd-performance' ) . '</th><th>' . esc_html__( 'Plugin', 'shd-performance' ) . '</th><th>' . esc_html__( 'Count', 'shd-performance' ) . '</th><th>' . esc_html__( 'Own time', 'shd-performance' ) . '</th><th>' . esc_html__( 'With content', 'shd-performance' ) . '</th></tr></thead><tbody>';
+			foreach ( (array) $report['elements'] as $element ) {
+				printf( '<tr><td><code>%1$s</code></td><td>%2$s</td><td>%3$d</td><td>%4$s ms</td><td>%5$s ms</td></tr>', esc_html( $element['name'] ), esc_html( Profiler::label( $element['component'] ) ), (int) $element['count'], esc_html( number_format_i18n( $element['ms'] ) ), esc_html( number_format_i18n( $element['total_ms'] ) ) );
+			}
+			echo '</tbody></table>';
+		}
+
+		if ( ! empty( $report['shortcodes'] ) ) {
+			echo '<h3>' . esc_html__( 'Shortcodes', 'shd-performance' ) . '</h3><table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Shortcode', 'shd-performance' ) . '</th><th>' . esc_html__( 'Plugin', 'shd-performance' ) . '</th><th>' . esc_html__( 'Count', 'shd-performance' ) . '</th><th>' . esc_html__( 'Own time', 'shd-performance' ) . '</th><th>' . esc_html__( 'With content', 'shd-performance' ) . '</th></tr></thead><tbody>';
+			foreach ( (array) $report['shortcodes'] as $shortcode ) {
+				printf( '<tr><td><code>[%1$s]</code></td><td>%2$s</td><td>%3$d</td><td>%4$s ms</td><td>%5$s ms</td></tr>', esc_html( $shortcode['tag'] ), esc_html( Profiler::label( $shortcode['component'] ) ), (int) $shortcode['count'], esc_html( number_format_i18n( $shortcode['ms'] ) ), esc_html( number_format_i18n( isset( $shortcode['total_ms'] ) ? $shortcode['total_ms'] : $shortcode['ms'] ) ) );
+			}
+			echo '</tbody></table>';
+		}
+
+		echo '<h3>' . esc_html__( 'Requests to other servers', 'shd-performance' ) . '</h3>';
+		if ( empty( $report['http'] ) ) {
+			echo '<p>' . esc_html__( 'None: good.', 'shd-performance' ) . '</p>';
+		} else {
+			echo '<table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Address', 'shd-performance' ) . '</th><th>' . esc_html__( 'Requested by', 'shd-performance' ) . '</th><th>' . esc_html__( 'Time', 'shd-performance' ) . '</th><th>' . esc_html__( 'Result', 'shd-performance' ) . '</th></tr></thead><tbody>';
+			foreach ( (array) $report['http'] as $call ) {
+				printf( '<tr><td><code>%1$s</code></td><td>%2$s</td><td>%3$s ms</td><td>%4$s</td></tr>', esc_html( $call['url'] ), esc_html( Profiler::label( $call['component'] ) ), esc_html( number_format_i18n( $call['ms'] ) ), esc_html( $call['result'] ) );
+			}
+			echo '</tbody></table>';
+		}
+
+		echo '<h3>' . esc_html__( 'Database', 'shd-performance' ) . '</h3><p>' . esc_html(
+			sprintf(
+				/* translators: 1: queries, 2: milliseconds */
+				__( '%1$s queries, %2$s ms (queries before SHD Performance loaded are counted but not timed).', 'shd-performance' ),
+				number_format_i18n( (int) $report['db']['count'] ),
+				number_format_i18n( (int) $report['db']['ms'] )
+			)
+		) . '</p>';
+		if ( ! empty( $report['db']['slowest'] ) ) {
+			echo '<details><summary>' . esc_html__( 'Slowest queries', 'shd-performance' ) . '</summary><table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Query', 'shd-performance' ) . '</th><th>' . esc_html__( 'Time', 'shd-performance' ) . '</th><th>' . esc_html__( 'Called from', 'shd-performance' ) . '</th></tr></thead><tbody>';
+			foreach ( (array) $report['db']['slowest'] as $query ) {
+				printf( '<tr><td><code>%1$s</code></td><td>%2$s ms</td><td>%3$s</td></tr>', esc_html( $query['sql'] ), esc_html( number_format_i18n( (float) $query['ms'], 1 ) ), esc_html( $query['caller'] ) );
+			}
+			echo '</tbody></table></details>';
+		}
+
+		echo '<details><summary>' . esc_html__( 'Timeline and slowest hooks', 'shd-performance' ) . '</summary>';
+		echo '<table class="widefat striped shd-table"><tbody>';
+		foreach ( Profiler::phases( $report ) as $phase ) {
+			printf( '<tr><td>%1$s</td><td>%2$s ms</td></tr>', esc_html( $phase['label'] ), esc_html( number_format_i18n( $phase['ms'] ) ) );
+		}
+		echo '</tbody></table><table class="widefat striped shd-table"><thead><tr><th>' . esc_html__( 'Hook', 'shd-performance' ) . '</th><th>' . esc_html__( 'Time in its callbacks', 'shd-performance' ) . '</th></tr></thead><tbody>';
+		foreach ( (array) $report['hooks'] as $hook => $ms ) {
+			printf( '<tr><td><code>%1$s</code></td><td>%2$s ms</td></tr>', esc_html( $hook ), esc_html( number_format_i18n( $ms ) ) );
+		}
+		echo '</tbody></table></details>';
 	}
 
 	private function tools_scan() {

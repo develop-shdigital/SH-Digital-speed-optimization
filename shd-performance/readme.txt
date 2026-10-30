@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -36,7 +36,7 @@ Page cache (replaces Kadence Performance):
 * Logged-in users, form submissions, password-protected posts, searches and addresses with parameters always get a fresh page. Ad and campaign links can optionally get the cached page.
 * Waits while Kadence Performance (or another page cache plugin) is active, and takes over when it is deactivated.
 
-The dashboard (SHD Performance in the admin menu) also contains health checks, a page scan, and a step-by-step checklist for everything that has to be changed by hand: cache settings, server, fonts, plugins, images, tracking, accessibility and domain set-up.
+The dashboard (SHD Performance in the admin menu) also contains health checks, a page scan, a measurement of where the server spends the time to build a page (per plugin, Elementor widget, shortcode, database query and request to other servers), and a step-by-step checklist for everything that has to be changed by hand: cache settings, server, fonts, plugins, images, tracking, accessibility and domain set-up.
 
 == Installation ==
 
@@ -65,6 +65,10 @@ As an administrator, open any page with `?shd-off=1`, or use "Show this page wit
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted.
 
 == Changelog ==
+
+= 1.2.0 =
+* Tools → "Where the build time goes": builds one page as a first-time visitor and shows the time per plugin, Elementor widget and shortcode, the database queries, requests to other servers and what to do about the biggest items. Only the measured request is affected.
+* The checklist task about slow uncached pages uses the measurement and is optional now that the page cache serves visitors.
 
 = 1.1.0 =
 * Page cache that replaces Kadence Performance: .htaccess delivery on Apache, advanced-cache.php elsewhere, background preload, automatic clearing (including Elementor saves and "Clear Files & Data"), optional caching of ad and campaign links.

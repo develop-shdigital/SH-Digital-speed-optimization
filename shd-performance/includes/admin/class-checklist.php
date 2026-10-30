@@ -87,18 +87,21 @@ final class Checklist {
 				'auto'     => array( __CLASS__, 'auto_campaign' ),
 			),
 			array(
-				'id'    => 'server-ttfb',
-				'group' => __( 'Caching and server', 'shd-performance' ),
-				'title' => __( 'Find out why WordPress needs about 2.5 s per uncached page', 'shd-performance' ),
-				'why'   => __( 'Cache misses, logged-in editors, form submissions and the admin all wait for this. A healthy Elementor site builds a page in 0.3–0.8 s.', 'shd-performance' ),
-				'steps' => array(
-					__( 'Look at the server items in the health checks: PHP version (8.2+), OPcache, persistent object cache (ask the host for Redis), autoloaded options, debug settings.', 'shd-performance' ),
-					__( 'On staging, install Query Monitor and open a page with ?nocache=1 in the URL: the “Queries by Component” and “HTTP API Calls” panels show which plugin is slow. External HTTP calls during page load (for example by custom plugins) are a common cause.', 'shd-performance' ),
-					__( 'With SSH access, “wp profile stage” and “wp profile hook --spotlight” (WP-CLI profile package) show the slowest hooks.', 'shd-performance' ),
-					__( 'Remove or replace the slowest plugin, or move to faster hosting (PHP workers, NVMe, LiteSpeed/nginx).', 'shd-performance' ),
+				'id'       => 'server-ttfb',
+				'group'    => __( 'Caching and server', 'shd-performance' ),
+				'title'    => __( 'Find out what makes uncached pages slow (up to 2.8 s on /blog/)', 'shd-performance' ),
+				'optional' => true,
+				'why'      => __( 'With the SHD page cache, visitors get stored pages. WordPress still builds the page for logged-in editors, form submissions, ad links with parameters (until “Ad and campaign links” is on) and the first request after a change. Measured on 30 October 2026: starting WordPress with all plugins takes about 0.4 s; building the page takes the rest: /kontakt/ 0.9 s, homepage 1.3 s, /was-ist-seo/ 1.5 s, /blog/ 2.8 s. /blog/ builds all 29 posts as Elementor post cards (240 widgets). A healthy Elementor site builds a page in 0.3–0.8 s.', 'shd-performance' ),
+				'steps'    => array(
+					__( 'Run the health checks on the Tools tab: they check the PHP version (8.2+), OPcache, a persistent object cache, autoloaded options and debug settings, and measure the homepage.', 'shd-performance' ),
+					__( 'Tools → “Where the build time goes”: measure the homepage, then the blog. It shows the time per plugin, Elementor widget and shortcode, the database queries and requests to other servers, and what to do about the biggest items.', 'shd-performance' ),
+					__( 'Blog: show 9 or 12 posts per page with page numbers or a “Load more” button instead of all 29 (Elementor → Templates → Theme Builder → the blog archive template → select the Loop Grid → Query: Posts per page, and Pagination). The page is then built faster and is lighter for visitors too.', 'shd-performance' ),
+					__( 'If the measurement or the health checks show no persistent object cache, OPcache off or PHP older than 8.2: ask your host for Redis, OPcache and PHP 8.3.', 'shd-performance' ),
+					__( 'If one plugin takes much of the time, check its settings or replace it. A plugin that asks another server for something while the page is built should store the answer; ask its developer.', 'shd-performance' ),
 				),
-				'auto'  => array( __CLASS__, 'auto_health' ),
-				'check' => 'ttfb_uncached',
+				'links'    => array( __( 'Where the build time goes', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=tools#profile' ) ),
+				'auto'     => array( __CLASS__, 'auto_server' ),
+				'check'    => 'ttfb_uncached',
 			),
 			array(
 				'id'       => 'cdn',
@@ -459,6 +462,16 @@ final class Checklist {
 			'status' => 'good' === $result['status'] ? 'done' : ( 'info' === $result['status'] ? 'unknown' : 'open' ),
 			'note'   => $result['value'],
 		);
+	}
+
+	public static function auto_server( array $task ) {
+		$status = self::auto_health( $task );
+		$report = Profiler::last();
+		if ( null !== $report ) {
+			/* translators: 1: page address, 2: milliseconds */
+			$status['note'] = trim( $status['note'] . ' ' . sprintf( __( 'Last measurement: %1$s built in %2$s ms.', 'shd-performance' ), wp_make_link_relative( $report['url'] ), number_format_i18n( (int) $report['total_ms'] ) ) );
+		}
+		return $status;
 	}
 
 	public static function auto_page_cache() {

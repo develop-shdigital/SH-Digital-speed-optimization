@@ -68,7 +68,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
 - **Overview**: status, the Test view and preview link, health summary, and real-visitor vitals.
 - **Checklist**: a step-by-step guide for everything that needs a person, with automatic status where it can be detected. It covers:
   - Switching from Kadence Performance to the SHD page cache, and ad and campaign links.
-  - Server speed and an optional CDN.
+  - Server speed (with the build-time measurement) and an optional CDN.
   - WOFF2 fonts.
   - Inline SVG icons instead of the Font Awesome icon fonts.
   - Unused add-ons.
@@ -83,7 +83,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
 - **Page cache**: status, stored pages, clear and refill buttons, lifetime, campaign links and exclusions.
 - **Fonts**: detected fonts, WOFF2 upload, preloads and the fallback metrics.
 - **Web Vitals**: LCP, INP, CLS, FCP and TTFB from real visits, per device and page.
-- **Tools**: health checks, a page scan, cache purge, settings export/import and diagnostics.
+- **Tools**: health checks, a page scan, cache purge, settings export/import, diagnostics, and **Where the build time goes**: one click builds a page on the server as a first-time visitor and shows the time per plugin, Elementor widget and shortcode, the database queries and requests to other servers, with what to do about the biggest items. Only that one request is measured.
 
 ### Install
 

@@ -1719,8 +1719,26 @@ final class Admin {
 			foreach ( $scan['videos'] as $video ) {
 				if ( 'youtube' === $video['source'] ) {
 					$handled = $video['overlay'] ? __( 'No: uses Elementor’s own image overlay, which already loads the player on click.', 'shd-performance' ) : __( 'Yes: click-to-play preview.', 'shd-performance' );
+				} elseif ( ! $video['autoplay'] ) {
+					$handled = __( 'Not needed: self-hosted video loads on play.', 'shd-performance' );
+				} elseif ( 'hosted' !== $video['source'] ) {
+					$handled = __( 'Not changed: player from another site.', 'shd-performance' );
+				} elseif ( ! isset( $video['section'] ) ) {
+					$handled = __( 'Run “Scan pages” again for details.', 'shd-performance' );
 				} else {
-					$handled = $video['autoplay'] ? __( 'No: self-hosted video that plays automatically, see the checklist.', 'shd-performance' ) : __( 'Not needed: self-hosted video loads on play.', 'shd-performance' );
+					$state = Settings::state( 'lazy_videos' );
+					if ( empty( $video['section'] ) || $video['section'] <= (int) Settings::get()['first_screen_sections'] ) {
+						$handled = __( 'No: plays automatically in the first screen.', 'shd-performance' );
+					} elseif ( 'live' === $state ) {
+						$handled = __( 'Yes: loads when it comes into view.', 'shd-performance' );
+					} elseif ( 'test' === $state ) {
+						$handled = __( 'In the Test view: loads when it comes into view.', 'shd-performance' );
+					} else {
+						$handled = __( 'No: “Start autoplaying videos further down when they come into view” is off.', 'shd-performance' );
+					}
+					if ( empty( $video['mute'] ) || empty( $video['inline'] ) ) {
+						$handled .= ' ' . __( 'Mute or Play On Mobile is off: see the checklist.', 'shd-performance' );
+					}
 				}
 				echo '<tr><td>' . $this->doc_link( $video ) . '</td><td>' . esc_html( $video['source'] . ( $video['autoplay'] ? ' · autoplay' : '' ) ) . '</td><td>' . esc_html( $handled ) . '</td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- doc_link escapes.
 			}

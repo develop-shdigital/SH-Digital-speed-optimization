@@ -172,12 +172,15 @@ final class Checklist {
 			array(
 				'id'    => 'hosted-video',
 				'group' => __( 'Add-ons and widgets', 'shd-performance' ),
-				'title' => __( 'Check the autoplaying self-hosted video', 'shd-performance' ),
-				'why'   => __( 'A video that plays automatically downloads during page load (often several MB).', 'shd-performance' ),
+				'title' => __( 'Let the autoplaying video play everywhere (Mute, Play On Mobile)', 'shd-performance' ),
+				'why'   => __( 'Browsers only autoplay a video that is muted: for a video with Autoplay but without Mute, Chrome, Safari and Firefox block it for visitors who come from outside the site, for example from an ad. With the player controls hidden, such a video then just shows its first frame (on /google-ads-agentur/: an empty chart instead of the “Umsatzwachstum” animation). Visitors who come from another page of the site may get it with sound instead. iPhones also need “Play On Mobile”. The download itself is handled automatically: SHD Performance loads autoplaying videos below the first screen only when they come into view.', 'shd-performance' ),
 				'steps' => array(
-					__( 'Keep it short and compressed: H.264 MP4 or WebM, 720p, ideally under 2 MB, muted, with a poster image.', 'shd-performance' ),
-					__( 'If it is decorative, an animated WebP/AVIF or a still image is lighter. If it is far down the page, set “Lazy load” in the video widget.', 'shd-performance' ),
+					__( 'Open the page with Elementor (link below) and select the video named under “Detected” (Structure panel → the Video widget in that section). Content → Video Options: Mute → Yes, Play On Mobile → Yes. Keep Autoplay; with Loop off it stops on its last frame.', 'shd-performance' ),
+					__( 'Optional: Poster → an image shown until the video plays, and where it cannot autoplay (iPhone Low Power Mode). The first frame of the video makes the start seamless.', 'shd-performance' ),
+					__( 'Optional: a smaller file. A muted video needs no sound track; removing a silent one keeps the picture identical (with the free tool ffmpeg: ffmpeg -i video.mp4 -an -c:v copy video-noaudio.mp4). Upload it under “Choose Video File”. Keep files under 2 MB.', 'shd-performance' ),
+					__( 'Update the page; the page cache refreshes by itself. Then run “Scan pages” on the Tools tab: this task is done when every autoplaying video is muted and plays on phones.', 'shd-performance' ),
 				),
+				'links' => self::video_links(),
 				'auto'  => array( __CLASS__, 'auto_hosted_video' ),
 			),
 			array(
@@ -577,16 +580,76 @@ final class Checklist {
 				'note'   => __( 'Run “Scan pages” on the Tools tab.', 'shd-performance' ),
 			);
 		}
-		$pages = array();
-		foreach ( $scan['videos'] as $video ) {
-			if ( 'youtube' !== $video['source'] && $video['autoplay'] ) {
-				$pages[] = $video['title'];
-			}
+		$found = self::autoplay_problems( $scan );
+		$notes = array();
+		foreach ( $found as $video ) {
+			/* translators: 1: page title, 2: section number */
+			$where   = $video['section'] > 0 ? sprintf( __( '%1$s, section %2$d', 'shd-performance' ), $video['title'], $video['section'] ) : $video['title'];
+			$notes[] = sprintf(
+				/* translators: 1: page (and section), 2: file name, 3: file size, 4: what is missing */
+				__( '%1$s: %2$s (%3$s) – %4$s', 'shd-performance' ),
+				$where,
+				'' !== $video['url'] ? wp_basename( (string) wp_parse_url( $video['url'], PHP_URL_PATH ) ) : $video['source'],
+				$video['bytes'] > 0 ? size_format( $video['bytes'] ) : __( 'size unknown', 'shd-performance' ),
+				implode( ', ', $video['issues'] )
+			);
 		}
 		return array(
-			'status' => empty( $pages ) ? 'done' : 'open',
-			'note'   => empty( $pages ) ? __( 'No autoplaying self-hosted video found.', 'shd-performance' ) : implode( ', ', array_unique( $pages ) ),
+			'status' => empty( $found ) ? 'done' : 'open',
+			'note'   => empty( $found ) ? __( 'Every autoplaying video is muted and plays on phones.', 'shd-performance' ) : implode( '; ', $notes ),
 		);
+	}
+
+	/**
+	 * Autoplaying videos that will not play for many visitors, with what is missing.
+	 *
+	 * @param array $scan Page scan.
+	 * @return array<int,array>
+	 */
+	private static function autoplay_problems( array $scan ) {
+		$found = array();
+		foreach ( (array) $scan['videos'] as $video ) {
+			if ( 'youtube' === $video['source'] || empty( $video['autoplay'] ) ) {
+				continue;
+			}
+			$issues = array();
+			if ( ! array_key_exists( 'mute', $video ) ) {
+				$issues[] = __( 'run “Scan pages” again for details', 'shd-performance' );
+			} elseif ( 'hosted' === $video['source'] ) {
+				if ( empty( $video['mute'] ) ) {
+					$issues[] = __( 'Mute is off', 'shd-performance' );
+				}
+				if ( empty( $video['inline'] ) ) {
+					$issues[] = __( 'Play On Mobile is off', 'shd-performance' );
+				}
+				if ( $video['bytes'] > 2 * MB_IN_BYTES ) {
+					$issues[] = __( 'file over 2 MB', 'shd-performance' );
+				}
+			}
+			if ( ! empty( $issues ) ) {
+				$found[] = $video + array(
+					'issues'  => $issues,
+					'section' => 0,
+					'bytes'   => 0,
+				);
+			}
+		}
+		return $found;
+	}
+
+	/**
+	 * “Edit with Elementor” links for the pages with an autoplaying video to fix.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function video_links() {
+		$scan  = Site_Scanner::last();
+		$links = array();
+		foreach ( null === $scan ? array() : self::autoplay_problems( $scan ) as $video ) {
+			/* translators: %s: page title */
+			$links[ sprintf( __( 'Edit “%s” with Elementor', 'shd-performance' ), $video['title'] ) ] = admin_url( 'post.php?post=' . (int) $video['id'] . '&action=elementor' );
+		}
+		return array_slice( $links, 0, 3, true );
 	}
 
 	public static function auto_images() {

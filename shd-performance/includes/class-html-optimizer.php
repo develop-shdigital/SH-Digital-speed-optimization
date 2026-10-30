@@ -92,6 +92,9 @@ final class Html_Optimizer {
 	private $lazy_bg        = 0;
 	private $loop_items     = 0;
 
+	// Autoplaying videos below the first screen, started when they come near.
+	private $lazy_videos    = 0;
+
 	/** @var array<string,int> */
 	private $stats = array();
 
@@ -238,6 +241,9 @@ final class Html_Optimizer {
 				break;
 			case 'IFRAME':
 				$this->on_iframe( $p );
+				break;
+			case 'VIDEO':
+				$this->on_video( $p );
 				break;
 			case 'SCRIPT':
 				$this->on_script( $p );
@@ -702,6 +708,28 @@ final class Html_Optimizer {
 			$p->set_attribute( 'loading', 'lazy' );
 			$this->count( 'lazy_iframes' );
 		}
+	}
+
+	/**
+	 * Autoplaying Elementor video below the first screen: download and start it only
+	 * when it comes near the viewport. Elementor's video widget has no JavaScript for
+	 * self-hosted videos (autoplay is the HTML attribute alone), and sizes the video
+	 * box from the widget's aspect ratio, so the later download moves nothing.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function on_video( $p ) {
+		if ( empty( $this->on['lazy_videos'] ) || null === $p->get_attribute( 'autoplay' ) || ! $p->has_class( 'elementor-video' ) || $this->in_first_screen() ) {
+			return;
+		}
+		$p->remove_attribute( 'autoplay' );
+		$p->set_attribute( 'data-shd-autoplay', true );
+		$preload = $p->get_attribute( 'preload' );
+		if ( is_string( $preload ) ) {
+			$p->set_attribute( 'data-shd-preload', $preload );
+		}
+		$p->set_attribute( 'preload', 'none' );
+		++$this->lazy_videos;
 	}
 
 	/**
@@ -1229,6 +1257,10 @@ final class Html_Optimizer {
 		if ( $this->lazy_bg > 0 ) {
 			$this->count( 'lazy_backgrounds', $this->lazy_bg );
 			$scripts .= '<script id="shd-perf-lazy-bg">' . Assets::script( 'lazy-bg' ) . "</script>\n";
+		}
+		if ( $this->lazy_videos > 0 ) {
+			$this->count( 'lazy_videos', $this->lazy_videos );
+			$scripts .= '<script id="shd-perf-lazy-video">' . Assets::script( 'lazy-video' ) . "</script>\n";
 		}
 		if ( ! empty( $this->on['rum'] ) ) {
 			$scripts .= Rum::loader_tag();

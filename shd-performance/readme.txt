@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,13 +20,14 @@ Automatic optimizations (each one can be Off, Test or Live):
 * The main image of each page is prioritized; the header logo no longer competes with it.
 * Lazy-loaded images download at the size they are shown (sizes="auto"); images get dimensions so the layout does not jump.
 * Click-to-play previews replace Elementor's YouTube players until someone presses play.
+* Autoplaying videos further down the page download when a visitor scrolls near them, not with the page.
 * reCAPTCHA loads when a visitor starts using a form.
 * Tracking scripts start after the first interaction; the cookie banner no longer blocks the first paint.
 * JavaScript is deferred, or started on the first interaction, with taps and form submits replayed.
 * Unused Qi Addons / LA-Studio Kit files, the emoji script, duplicate scripts and (optionally) jQuery Migrate are removed.
 * Fonts: font-display: swap, uploaded WOFF2 files, preloads and a size-matched fallback font.
 * The blog's table of contents is filled in from the start, so it no longer pushes the article down.
-* Real-visitor Core Web Vitals (LCP, INP, CLS, FCP, TTFB) are measured without cookies.
+* Real-visitor Core Web Vitals (LCP, INP, CLS, FCP, TTFB) are measured without cookies. Automated browsers, such as PageSpeed Insights' test runs, are not counted.
 
 Page cache (replaces Kadence Performance):
 
@@ -62,9 +63,14 @@ As an administrator, open any page with `?shd-off=1`, or use "Show this page wit
 
 = Does the Web Vitals measurement use cookies? =
 
-No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted.
+No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.3.0 =
+* Autoplaying self-hosted videos below the first screen (Elementor Video widget) download when a visitor scrolls near them instead of with the page. Their box keeps its size, so nothing moves. New feature "Start autoplaying videos further down when they come into view" (Live).
+* Checklist: the autoplaying-video task names the page, section and file and checks Mute and Play On Mobile, without which browsers block the autoplay (iPhones also need Play On Mobile). It turns green after "Scan pages" once both are on. Tools shows which videos wait until they come into view.
+* Web Vitals: automated browsers (navigator.webdriver: test tools and PageSpeed Insights' lab runs) are no longer measured. A one-time clean-up removes the samples recorded for /google-ads-agentur/ on 30 October 2026 between 14:02 and 14:12 UTC, which came from an automated test.
 
 = 1.2.1 =
 * Build-time report: [elementor-element] (the placeholder of Elementor's Element Cache for widgets it builds again on every visit) is explained with the widgets instead of being listed as a shortcode.

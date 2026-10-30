@@ -9,7 +9,8 @@
 	'use strict';
 
 	var cfg = w.shdPerfRum;
-	if ( ! cfg || ! w.navigator.sendBeacon || Math.random() * 100 >= cfg.sample ) {
+	// Real visitors only: automated browsers (tests, PageSpeed's lab runs) report navigator.webdriver.
+	if ( ! cfg || ! w.navigator.sendBeacon || w.navigator.webdriver || Math.random() * 100 >= cfg.sample ) {
 		return;
 	}
 

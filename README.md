@@ -21,6 +21,7 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | The header logo has `fetchpriority="high"`, while the real main image is lazy-loaded. | Picks the largest first-screen image (or the featured image) and prioritizes that instead. | Live |
 | Small images download large files, e.g. 34 px avatars load 768 px files. | `sizes="auto"` on lazy images. The browser picks the right srcset file, with no recompression. | Live |
 | YouTube widget loads about 1 MB of player code before anyone presses play. | Click-to-play preview. Playback starts with that click. | Live |
+| The autoplaying chart video in section 4 of /google-ads-agentur/ (735 KB) downloads with the page, far below the first screen. | Autoplaying videos below the first screen load when a visitor scrolls near them. The box keeps its size, so nothing moves. | Live |
 | reCAPTCHA v3 (349 KB) loads on every page. | Loaded when a visitor starts using a form. Submits wait for the token. | Live |
 | Tracking scripts compete with page load. | Start on the first interaction (or after 10 s). Consent handling is unchanged. | Live |
 | CookieFirst `consent.js` blocks the first paint (about 1 s on phones). | Downloaded early without blocking and started at the top of `<body>`. | Live |
@@ -30,7 +31,7 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | The cursor-dot script redraws 60×/s forever and leaves a stray dot on phones. | Same effect on mouse devices, idle when the mouse rests, hidden on touch devices. | Live |
 | JavaScript blocks rendering and causes about 1 s of Total Blocking Time on mobile. | Defer all scripts, or start them on the first interaction (taps and form submits are replayed). | Test |
 | jQuery Migrate. | Removed. | Test |
-| No real-visitor data (Google has none for this site yet). | Cookieless Core Web Vitals measurement with a 75th-percentile dashboard. | Live |
+| No real-visitor data (Google has none for this site yet). | Cookieless Core Web Vitals measurement with a 75th-percentile dashboard. Automated browsers, including PageSpeed Insights' test runs, are not counted. | Live |
 | WordPress needs about 2.5 s to build a page. Kadence Performance's cache missed on 62 of 63 pages for the first phone visitor, and its lazy-loading delayed the video cover on /google-ads-agentur/. | Its own page cache: one copy for phones and computers, sent by Apache in about 1 ms, refilled in the background, and cleared when you save in Elementor (see below). | On; takes over when Kadence Performance is deactivated |
 
 #### One design choice
@@ -73,6 +74,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
   - Inline SVG icons instead of the Font Awesome icon fonts.
   - Unused add-ons.
   - Oversized image files and image sizes in widgets.
+  - The autoplaying video on /google-ads-agentur/: Mute and Play On Mobile, so that it plays for every visitor.
   - The table of contents on phones (optional design choice).
   - Duplicate Google Analytics.
   - The cookie banner.
@@ -82,7 +84,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
 - **Optimizations**: the feature switches and advanced settings.
 - **Page cache**: status, stored pages, clear and refill buttons, lifetime, campaign links and exclusions.
 - **Fonts**: detected fonts, WOFF2 upload, preloads and the fallback metrics.
-- **Web Vitals**: LCP, INP, CLS, FCP and TTFB from real visits, per device and page.
+- **Web Vitals**: LCP, INP, CLS, FCP and TTFB from real visits, per device and page. Automated browsers are not measured.
 - **Tools**: health checks, a page scan, cache purge, settings export/import, diagnostics, and **Where the build time goes**: one click builds a page on the server as a first-time visitor and shows the time per plugin, Elementor widget and shortcode, the database queries and requests to other servers, with what to do about the biggest items. Only that one request is measured.
 
 ### Install

@@ -72,6 +72,13 @@ final class Settings {
 				'title'   => __( 'Lazy-load iframes below the first screen', 'shd-performance' ),
 				'fixes'   => __( 'Embeds such as maps load when they come near the viewport instead of during page load.', 'shd-performance' ),
 			),
+			'lazy_videos'         => array(
+				'group'   => 'content',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'Start autoplaying videos further down when they come into view', 'shd-performance' ),
+				'fixes'   => __( 'A video set to play automatically is downloaded during page load even far below the screen: on /google-ads-agentur/ the 735 KB “Umsatzwachstum” chart animation in the fourth section competed with the first screen on phones. Elementor video widgets below the first screen now load and start when they come within about one screen of view, so the animation also plays when visitors actually see it. The video box keeps its size (Elementor sizes it from the widget’s aspect ratio), so nothing moves. Videos in the first screen are unchanged.', 'shd-performance' ),
+			),
 			'youtube_facade'      => array(
 				'group'   => 'third-party',
 				'default' => 'live',

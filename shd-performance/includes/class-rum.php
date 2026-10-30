@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 final class Rum {
 
 	const TABLE      = 'shd_perf_vitals';
-	const DB_VERSION = '1';
+	const DB_VERSION = '2';
 	const REST_NAMESPACE = 'shd-performance/v1';
 	const METRICS    = array( 'lcp', 'inp', 'cls', 'fcp', 'ttfb' );
 
@@ -60,6 +60,11 @@ final class Rum {
 			KEY path (path)
 			) {$charset};"
 		);
+		// Version 2: remove the samples an automated browser test sent to /google-ads-agentur/ by mistake
+		// on 30 October 2026 between 14:04 and 14:09 UTC, with two minutes either side for clock differences.
+		// Automated browsers are no longer measured (rum.js).
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE path = %s AND created_at BETWEEN %s AND %s", '/google-ads-agentur/', '2026-10-30 14:02:00', '2026-10-30 14:12:00' ) );
 		update_option( 'shd_perf_rum_db', self::DB_VERSION, false );
 	}
 

@@ -51,7 +51,10 @@ final class Site_Scanner {
 			$widgets    = array();
 			$animations = 0;
 			$videos     = array();
-			self::walk( $data, $widgets, $animations, $videos );
+			// One walk per top-level section, so videos know which section of the page they are in.
+			foreach ( array_values( $data ) as $index => $section ) {
+				self::walk( array( $section ), $widgets, $animations, $videos, $index + 1 );
+			}
 
 			$doc = array(
 				'id'    => (int) $row['post_id'],
@@ -101,8 +104,9 @@ final class Site_Scanner {
 	 * @param array $widgets    Widget counts (by reference).
 	 * @param int   $animations Entrance animations (by reference).
 	 * @param array $videos     Video widgets (by reference).
+	 * @param int   $section    Top-level section (1-based).
 	 */
-	private static function walk( array $elements, array &$widgets, &$animations, array &$videos ) {
+	private static function walk( array $elements, array &$widgets, &$animations, array &$videos, $section = 0 ) {
 		foreach ( $elements as $element ) {
 			if ( ! is_array( $element ) ) {
 				continue;
@@ -117,17 +121,27 @@ final class Site_Scanner {
 				$type             = strtolower( (string) $element['widgetType'] );
 				$widgets[ $type ] = isset( $widgets[ $type ] ) ? $widgets[ $type ] + 1 : 1;
 				if ( 'video' === $type ) {
-					$source   = isset( $settings['video_type'] ) ? (string) $settings['video_type'] : 'youtube';
+					$source = isset( $settings['video_type'] ) ? (string) $settings['video_type'] : 'youtube';
+					$url    = isset( $settings['youtube_url'] ) ? (string) $settings['youtube_url'] : '';
+					if ( 'hosted' === $source ) {
+						$external = isset( $settings['insert_url'] ) && 'yes' === $settings['insert_url'];
+						$url      = $external ? ( isset( $settings['external_url']['url'] ) ? (string) $settings['external_url']['url'] : '' ) : ( isset( $settings['hosted_url']['url'] ) ? (string) $settings['hosted_url']['url'] : '' );
+					}
+					$path     = 'hosted' === $source && '' !== $url ? Fonts::local_path( $url ) : null;
 					$videos[] = array(
 						'source'   => $source,
 						'autoplay' => ! empty( $settings['autoplay'] ),
+						'mute'     => isset( $settings['mute'] ) && 'yes' === $settings['mute'],
+						'inline'   => isset( $settings['play_on_mobile'] ) && 'yes' === $settings['play_on_mobile'],
 						'overlay'  => isset( $settings['show_image_overlay'] ) && 'yes' === $settings['show_image_overlay'] && ! empty( $settings['image_overlay']['url'] ),
-						'url'      => 'hosted' === $source && isset( $settings['hosted_url']['url'] ) ? (string) $settings['hosted_url']['url'] : ( isset( $settings['youtube_url'] ) ? (string) $settings['youtube_url'] : '' ),
+						'url'      => $url,
+						'bytes'    => null !== $path ? (int) @filesize( $path ) : 0, // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+						'section'  => (int) $section,
 					);
 				}
 			}
 			if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
-				self::walk( $element['elements'], $widgets, $animations, $videos );
+				self::walk( $element['elements'], $widgets, $animations, $videos, $section );
 			}
 		}
 	}

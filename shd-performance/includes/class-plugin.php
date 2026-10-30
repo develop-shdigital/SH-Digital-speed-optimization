@@ -34,6 +34,7 @@ final class Plugin {
 		add_action( 'admin_bar_menu', array( $this, 'admin_bar' ), 90 );
 		add_action( self::CRON_HOOK, array( $this, 'daily' ) );
 
+		Page_Cache::register();
 		Youtube::register();
 		Rum::register();
 
@@ -170,6 +171,17 @@ final class Plugin {
 			)
 		);
 
+		if ( Page_Cache::serving() ) {
+			$bar->add_node(
+				array(
+					'parent' => 'shd-perf',
+					'id'     => 'shd-perf-purge',
+					'title'  => __( 'Clear the page cache', 'shd-performance' ),
+					'href'   => wp_nonce_url( admin_url( 'admin-post.php?action=shd_perf_purge&tab=cache' ), 'shd_perf_purge' ),
+				)
+			);
+		}
+
 		if ( ! is_admin() ) {
 			$host    = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : (string) wp_parse_url( home_url(), PHP_URL_HOST );
 			$uri     = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
@@ -218,10 +230,13 @@ final class Plugin {
 		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
 			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', self::CRON_HOOK );
 		}
+		// Takes over from Kadence Performance once that is deactivated; until then this only records the reason.
+		Page_Cache::sync();
 	}
 
 	public static function deactivate() {
 		wp_clear_scheduled_hook( self::CRON_HOOK );
 		wp_clear_scheduled_hook( Youtube::META_HOOK );
+		Page_Cache::teardown( true );
 	}
 }

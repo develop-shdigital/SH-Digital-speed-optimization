@@ -11,7 +11,7 @@ Tools for making https://www.sh-digital.ch fast: a 95+ PageSpeed score on mobile
 
 ## The plugin
 
-SHD Performance rewrites each finished page after Elementor and the other plugins have built it, and before Kadence Performance caches it. It never edits Elementor data, content or other plugins' settings. Deactivating it restores the original site.
+SHD Performance rewrites each finished page after Elementor and the other plugins have built it, then stores it in its own page cache, which replaces Kadence Performance. It never edits Elementor data, content or other plugins' settings. Deactivating it restores the original site.
 
 ### What it fixes automatically
 
@@ -31,10 +31,30 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | JavaScript blocks rendering and causes about 1 s of Total Blocking Time on mobile. | Defer all scripts, or start them on the first interaction (taps and form submits are replayed). | Test |
 | jQuery Migrate. | Removed. | Test |
 | No real-visitor data (Google has none for this site yet). | Cookieless Core Web Vitals measurement with a 75th-percentile dashboard. | Live |
+| WordPress needs about 2.5 s to build a page. Kadence Performance's cache missed on 62 of 63 pages for the first phone visitor, and its lazy-loading delayed the video cover on /google-ads-agentur/. | Its own page cache: one copy for phones and computers, sent by Apache in about 1 ms, refilled in the background, and cleared when you save in Elementor (see below). | On; takes over when Kadence Performance is deactivated |
 
 #### One design choice
 
 *Table of contents on phones* (Optimizations → Advanced settings) is **Open, as designed** by default. On blog posts with many headings, the open list fills the first screen on phones and pushes the featured image out of it. For first-time visitors the cookie banner then becomes the largest element on the screen. Because the banner loads in 9 steps from CookieFirst's servers, PageSpeed counts a slow LCP: about 4.5 s and a mobile score of about 80 on the 8 affected posts. With **Collapsed, with a button to open it**, the measured post scored 88–96. The arrow button opens the list at once, also before the page's other scripts have started. Desktop is never affected.
+
+### Page cache
+
+Each finished page (with all optimizations applied) is stored as a file in `wp-content/cache/shd-performance/pages/`, plain and gzipped. The next visitors get that file:
+
+- on Apache, directly from the web server through rules at the top of `.htaccess`, without PHP or WordPress (about 1 ms on the server);
+- elsewhere, from `wp-content/advanced-cache.php`, before WordPress loads.
+
+Logged-in users, password-protected posts, form submissions, searches, 404 pages and addresses with parameters always get a fresh page from WordPress. Addresses that only add marketing parameters (`?gclid=…`, `?utm_…`) can get the cached page too; that option is off until Google Analytics is loaded from one place (see the checklist).
+
+Stored pages live for 10 hours at most, because the forms and the newsletter sign-up contain WordPress security tokens that expire after 12–24 hours. They are rebuilt in the background before they expire. Every public page (home, pages, posts, categories) is also cached in the background right after the cache is cleared, so the first visitor and Google's test get a stored page.
+
+The whole cache is cleared when content changes: a post or page is published, updated or deleted; you save in Elementor (pages, templates, header and footer, popups, site settings); Elementor → Tools → “Clear Files & Data” is pressed; menus, widgets, the Customizer, permalinks, plugins or themes change; or settings are saved in SHD Performance. A new comment only clears its own post.
+
+**Elementor's Element Cache** (Elementor → Settings → Performance) keeps the rendered widgets in the database for a day. It makes building a page faster, but WordPress still starts for every visit, so it does not replace a page cache. Both work together. Because a document save or “Clear Files & Data” deletes the CSS files that Elementor generates, the page cache is cleared at the same moment, so a stored page never links to a CSS file that no longer exists.
+
+**Switching from Kadence Performance:** while Kadence Performance is active, the SHD page cache waits. Deactivate Kadence Performance: it removes its rules and its `advanced-cache.php`, and SHD Performance installs its own in the same request, then fills the cache within a few minutes. `WP_CACHE` stays `true` in `wp-config.php`. Leftover Kadence rules in `.htaccess` are removed. Another plugin's page cache or `advanced-cache.php` is never overwritten.
+
+Deactivating SHD Performance removes its `.htaccess` rules, `advanced-cache.php`, the stored pages and the `WP_CACHE` line, if the plugin added that line.
 
 Every feature can be set to **Off**, **Test** or **Live**:
 
@@ -47,7 +67,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
 
 - **Overview**: status, the Test view and preview link, health summary, and real-visitor vitals.
 - **Checklist**: a step-by-step guide for everything that needs a person, with automatic status where it can be detected. It covers:
-  - Kadence Performance's mobile cache and its lazy-loading of video covers.
+  - Switching from Kadence Performance to the SHD page cache, and ad and campaign links.
   - Server speed and an optional CDN.
   - WOFF2 fonts.
   - Inline SVG icons instead of the Font Awesome icon fonts.
@@ -60,6 +80,7 @@ Every feature can be set to **Off**, **Test** or **Live**:
   - Redirects, robots.txt and Brotli.
   - Verification in PageSpeed Insights and with real-visitor data.
 - **Optimizations**: the feature switches and advanced settings.
+- **Page cache**: status, stored pages, clear and refill buttons, lifetime, campaign links and exclusions.
 - **Fonts**: detected fonts, WOFF2 upload, preloads and the fallback metrics.
 - **Web Vitals**: LCP, INP, CLS, FCP and TTFB from real visits, per device and page.
 - **Tools**: health checks, a page scan, cache purge, settings export/import and diagnostics.
@@ -70,15 +91,15 @@ Every feature can be set to **Off**, **Test** or **Live**:
 2. In WordPress, go to Plugins → Add New → Upload Plugin and activate it.
 3. Open *SHD Performance → Checklist* and follow the guide. The first steps are:
    - Check the Test features in the Test view, then switch them to Live.
-   - Turn off “Mobile Cache” in Settings → Kadence Performance and press “Preload & Refresh All”.
+   - Deactivate Kadence Performance. SHD Performance takes over the page cache automatically.
    - Upload the WOFF2 fonts on the Fonts tab.
 
 ### Undo
 
-- To undo one change, set its feature to Off. The Kadence Performance cache is cleared automatically on save.
+- To undo one change, set its feature to Off. The page cache is cleared and refilled automatically on save.
 - To compare against the original, open any page with `?shd-off=1` as an administrator.
 - To undo everything, deactivate the plugin.
-- If the admin is not reachable, add `define( 'SHD_PERFORMANCE_DISABLE', true );` to `wp-config.php`.
+- If the admin is not reachable, add `define( 'SHD_PERFORMANCE_DISABLE', true );` to `wp-config.php`. Stored pages stop with the first page WordPress builds after that; to stop them at once, delete `wp-content/cache/shd-performance/pages` by FTP.
 
 ## Results
 
@@ -108,7 +129,7 @@ What remains is in the checklist, because it needs changes in Elementor, the med
 
 - **Font Awesome icon fonts:** about 180 KB on every page. They download while the main image loads. Fix: “Switch Elementor icons to inline SVG”.
 - **/blog/:** the post cards use full-size featured images as backgrounds, 237 KB for the first card alone. Fix: “Use smaller image sizes in widgets”.
-- **/google-ads-agentur/:** the video cover is the full 391 KB image, and Kadence Performance lazy-loads it with an extra script. Fix: turn off “Lazy Load Images” in Kadence and set the cover's image resolution to Large.
+- **/google-ads-agentur/:** the video cover is the full 391 KB image. Kadence Performance also lazy-loaded it with an extra script; switching to the SHD page cache removes that. Fix: set the cover's image resolution to Large.
 - **/kontakt/:** a photo saved as a 107 KB PNG. Fix: “Replace oversized image files”.
 - **Long blog posts (8 of 30):** the open table of contents fills the first screen on phones, and the cookie banner becomes the slowest element. Fix: the optional collapsed table of contents.
 

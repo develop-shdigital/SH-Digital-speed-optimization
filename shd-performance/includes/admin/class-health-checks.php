@@ -34,7 +34,8 @@ final class Health_Checks {
 		$campaign = self::fetch( add_query_arg( array( 'utm_source' => 'shd-check', 'gclid' => 'shd-check' ), $home ), self::UA_MOBILE );
 		$fresh    = self::fetch( add_query_arg( 'shd-nocache', wp_generate_password( 8, false, false ), $home ), self::UA_DESKTOP );
 
-		$results['cache_desktop']   = self::cache_result( __( 'Page cache, desktop visitors', 'shd-performance' ), $desktop, 'cache-mobile' );
+		$results['page_cache']      = self::page_cache_result();
+		$results['cache_desktop']   = self::cache_result( __( 'Page cache, desktop visitors', 'shd-performance' ), $desktop, 'page-cache' );
 		$results['cache_mobile']    = self::mobile_result( $mobile_1, $mobile_2 );
 		$results['cache_campaign']  = self::cache_result( __( 'Page cache for ad/campaign links (?gclid=, ?utm_…)', 'shd-performance' ), $campaign, 'cache-query-params' );
 		$results['ttfb_uncached']   = self::uncached_result( $fresh );
@@ -54,7 +55,6 @@ final class Health_Checks {
 		$results['autoload']     = self::autoload_result();
 		$results['debug']        = self::debug_result();
 		$results['font_icons']   = self::font_icons_result();
-		$results                 = array_merge( $results, self::kadence_results() );
 		$results['redirects']    = self::redirect_result();
 		$results['robots']       = self::robots_result();
 
@@ -132,7 +132,7 @@ final class Health_Checks {
 	 */
 	private static function cache_state( array $response ) {
 		$headers = $response['headers'];
-		foreach ( array( 'x-cache', 'cf-cache-status', 'x-litespeed-cache', 'x-proxy-cache', 'x-wp-super-cache', 'x-cache-status', 'x-rocket-nginx-serving-static' ) as $name ) {
+		foreach ( array( 'x-shd-cache', 'x-cache', 'cf-cache-status', 'x-litespeed-cache', 'x-proxy-cache', 'x-wp-super-cache', 'x-cache-status', 'x-rocket-nginx-serving-static' ) as $name ) {
 			if ( isset( $headers[ $name ] ) ) {
 				return preg_match( '/\bhit\b/i', $headers[ $name ] ) ? 'hit' : 'miss';
 			}
@@ -151,6 +151,9 @@ final class Health_Checks {
 		$state = self::cache_state( $response );
 		$label = 'hit' === $state ? 'HIT' : ( 'miss' === $state ? 'MISS' : __( 'no cache header', 'shd-performance' ) );
 		$via   = isset( $response['headers']['x-cached-by'] ) ? ' · ' . $response['headers']['x-cached-by'] : '';
+		if ( isset( $response['headers']['x-shd-cache'] ) && preg_match( '/\(([^)]+)\)/', $response['headers']['x-shd-cache'], $m ) ) {
+			$via = ' · SHD Performance (' . $m[1] . ')';
+		}
 		return sprintf( '%s · %s ms%s', $label, number_format_i18n( $response['ms'] ), $via );
 	}
 
@@ -175,7 +178,7 @@ final class Health_Checks {
 			/* translators: 1: first request, 2: second request */
 			'value'  => sprintf( __( 'first request: %1$s — second request: %2$s', 'shd-performance' ), self::describe( $first ), self::describe( $second ) ),
 			'detail' => __( 'Google tests the mobile version. If the first phone request is a MISS, the first phone visitor to every page (and often Google’s test) waits for WordPress to build the page.', 'shd-performance' ),
-			'task'   => 'cache-mobile',
+			'task'   => 'page-cache',
 		);
 	}
 
@@ -312,36 +315,29 @@ final class Health_Checks {
 		);
 	}
 
-	/**
-	 * Kadence Performance (formerly Solid Performance) settings that matter here.
-	 *
-	 * @return array
-	 */
-	private static function kadence_results() {
-		if ( ! function_exists( 'swpsp_config_get' ) ) {
-			return array();
-		}
-		try {
-			$mobile = (bool) swpsp_config_get( 'page_cache.mobile_cache.enabled' );
-			$lazy   = (bool) swpsp_config_get( 'page_cache.lazy_loading.enabled' );
-		} catch ( \Throwable $error ) {
-			return array();
+	private static function page_cache_result() {
+		$status = Page_Cache::status();
+		$labels = array(
+			'htaccess' => __( 'active, sent directly by the web server (.htaccess)', 'shd-performance' ),
+			'php'      => __( 'active, sent by advanced-cache.php before WordPress loads', 'shd-performance' ),
+			'plugin'   => __( 'active, but sent only after the plugins have loaded', 'shd-performance' ),
+		);
+		if ( 'active' === $status['state'] ) {
+			$value = isset( $labels[ $status['delivery'] ] ) ? $labels[ $status['delivery'] ] : __( 'active', 'shd-performance' );
+		} elseif ( 'blocked' === $status['state'] ) {
+			/* translators: %s: plugin name */
+			$value = sprintf( __( 'waiting: %s is still active', 'shd-performance' ), $status['blocker'] );
+		} elseif ( 'off' === $status['state'] ) {
+			$value = __( 'switched off', 'shd-performance' );
+		} else {
+			$value = __( 'not working', 'shd-performance' );
 		}
 		return array(
-			'kadence_mobile_cache' => array(
-				'label'  => __( 'Kadence Performance: “Mobile Cache” off', 'shd-performance' ),
-				'status' => $mobile ? 'bad' : 'good',
-				'value'  => $mobile ? __( 'on (phones get a separate cache that the preloader never fills)', 'shd-performance' ) : __( 'off', 'shd-performance' ),
-				'detail' => __( 'The site sends phones and computers the same HTML, so one shared cache is safe and lets the preloader cache pages for phones too.', 'shd-performance' ),
-				'task'   => 'cache-mobile',
-			),
-			'kadence_lazy_images'  => array(
-				'label'  => __( 'Kadence Performance: “Lazy Load Images” off', 'shd-performance' ),
-				'status' => $lazy ? 'warn' : 'good',
-				'value'  => $lazy ? __( 'on', 'shd-performance' ) : __( 'off', 'shd-performance' ),
-				'detail' => __( 'This option only affects inline background images (here: the cover images of two videos) and loads them with JavaScript, which delays them when they are in the first screen. It also makes Kadence Performance re-write every page.', 'shd-performance' ),
-				'task'   => 'cache-lazy-images',
-			),
+			'label'  => __( 'SHD page cache', 'shd-performance' ),
+			'status' => 'active' === $status['state'] ? ( 'plugin' === $status['delivery'] ? 'warn' : 'good' ) : ( 'error' === $status['state'] || 'unsupported' === $status['state'] ? 'bad' : 'warn' ),
+			'value'  => $value,
+			'detail' => implode( ' ', array_merge( array( __( 'Stores every page as a file and sends it without starting WordPress; replaces the page cache of Kadence Performance.', 'shd-performance' ) ), (array) $status['notes'] ) ),
+			'task'   => 'page-cache',
 		);
 	}
 

@@ -209,6 +209,11 @@ final class Css_Rewriter {
 		$url     = trailingslashit( $uploads['baseurl'] ) . self::CACHE_SUBDIR . '/' . $name;
 
 		if ( is_file( $target ) ) {
+			// Still in use: keep it out of the daily clean-up of copies unused for 30 days
+			// (stored pages of the page cache link to it for up to 12 hours).
+			if ( filemtime( $target ) < time() - DAY_IN_SECONDS ) {
+				@touch( $target ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			}
 			return $url;
 		}
 

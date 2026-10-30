@@ -16,7 +16,7 @@ final class Admin {
 	const NOTICE = 'shd_perf_notice_';
 
 	/** Form actions, each handled by do_{name}() behind a capability and nonce check. */
-	const ACTIONS = array( 'save', 'promote', 'reset', 'purge', 'fonts_detect', 'fonts_upload', 'fonts_remove', 'fonts_preload', 'task', 'token', 'scan', 'health', 'export', 'import', 'clear_error' );
+	const ACTIONS = array( 'save', 'promote', 'reset', 'purge', 'cache_save', 'cache_preload', 'fonts_detect', 'fonts_upload', 'fonts_remove', 'fonts_preload', 'task', 'token', 'scan', 'health', 'export', 'import', 'clear_error' );
 
 	/** @var Admin|null */
 	private static $instance = null;
@@ -141,7 +141,7 @@ final class Admin {
 		/* translators: %s: cache names */
 		$note = sprintf( __( 'Cleared automatically: %s.', 'shd-performance' ), implode( ', ', $purged ) );
 		if ( in_array( 'Kadence Performance', $purged, true ) ) {
-			$note .= ' ' . __( 'Press “Preload & Refresh All” in Settings → Kadence Performance to rebuild the cache; until then each page is cached on its first visit.', 'shd-performance' );
+			$note .= ' ' . __( 'Press “Preload & Refresh All” in Settings → Kadence Performance to rebuild the cache; until then each page is cached on its first visit. Or deactivate Kadence Performance: the SHD page cache then takes over and refills itself.', 'shd-performance' );
 		}
 		return $note;
 	}
@@ -172,7 +172,34 @@ final class Admin {
 	}
 
 	private function do_purge() {
-		$this->back( 'tools', 'success', self::purge_note( Cache::purge_all() ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked in dispatch().
+		$tab = isset( $_REQUEST['tab'] ) && 'cache' === $_REQUEST['tab'] ? 'cache' : 'tools';
+		$this->back( $tab, 'success', self::purge_note( Cache::purge_all() ) );
+	}
+
+	private function do_cache_save() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in dispatch(); sanitized below.
+		$input = isset( $_POST['shd'] ) && is_array( $_POST['shd'] ) ? wp_unslash( $_POST['shd'] ) : array();
+		Settings::update( self::sanitize( array_intersect_key( $input, array_flip( array( 'page_cache', 'cache_ttl', 'cache_campaign', 'cache_exclude' ) ) ) ) );
+		$status = Page_Cache::sync();
+		$note   = 'active' === $status['state'] ? ' ' . self::purge_note( Cache::purge_all() ) : '';
+		$this->back( 'cache', 'success', __( 'Page cache settings saved.', 'shd-performance' ) . $note );
+	}
+
+	private function do_cache_preload() {
+		if ( ! Page_Cache::serving() ) {
+			$this->back( 'cache', 'warning', __( 'The page cache is not active.', 'shd-performance' ) );
+		}
+		$count = Page_Cache::queue_stale();
+		Page_Cache::kick();
+		$this->back(
+			'cache',
+			'success',
+			0 === $count
+				? __( 'Every page is already in the cache.', 'shd-performance' )
+				/* translators: %d: number of pages */
+				: sprintf( _n( '%d page is being cached in the background (about 10 pages per 30 seconds).', '%d pages are being cached in the background (about 10 pages per 30 seconds).', $count, 'shd-performance' ), $count )
+		);
 	}
 
 	private function do_fonts_detect() {
@@ -381,6 +408,24 @@ final class Admin {
 		if ( isset( $input['rum_sample'] ) ) {
 			$clean['rum_sample'] = max( 0, min( 100, (int) $input['rum_sample'] ) );
 		}
+		foreach ( array( 'page_cache', 'cache_campaign' ) as $key ) {
+			if ( isset( $input[ $key ] ) ) {
+				$clean[ $key ] = (bool) $input[ $key ];
+			}
+		}
+		if ( isset( $input['cache_ttl'] ) ) {
+			$clean['cache_ttl'] = max( 1, min( 12, (int) $input['cache_ttl'] ) );
+		}
+		if ( isset( $input['cache_exclude'] ) ) {
+			$paths = array();
+			foreach ( self::lines( $input['cache_exclude'] ) as $line ) {
+				$path = (string) wp_parse_url( $line, PHP_URL_PATH );
+				if ( '' !== $path && preg_match( '#^/?[^\s<>"\'\\\\]*$#', $path ) ) {
+					$paths[] = '/' . ltrim( $path, '/' );
+				}
+			}
+			$clean['cache_exclude'] = array_values( array_unique( $paths ) );
+		}
 		if ( isset( $input['fonts']['preload'] ) && is_array( $input['fonts']['preload'] ) ) {
 			$clean['fonts']['preload'] = array_values( array_filter( array_map( 'strval', $input['fonts']['preload'] ), array( __CLASS__, 'is_weight' ) ) );
 		}
@@ -423,6 +468,7 @@ final class Admin {
 			'overview'  => __( 'Overview', 'shd-performance' ),
 			'checklist' => __( 'Checklist', 'shd-performance' ),
 			'features'  => __( 'Optimizations', 'shd-performance' ),
+			'cache'     => __( 'Page cache', 'shd-performance' ),
 			'fonts'     => __( 'Fonts', 'shd-performance' ),
 			'vitals'    => __( 'Web Vitals', 'shd-performance' ),
 			'tools'     => __( 'Tools', 'shd-performance' ),
@@ -620,6 +666,15 @@ final class Admin {
 			echo '<p><strong>' . esc_html__( 'Next: check the Test features in the Test view, then switch them to Live on the Optimizations tab. They contain the largest mobile-score gains.', 'shd-performance' ) . '</strong></p>';
 		}
 		echo '<p><a class="button" href="' . esc_url( self::url( 'features' ) ) . '">' . esc_html__( 'Optimizations', 'shd-performance' ) . '</a></p>';
+		echo '</section>';
+
+		// Page cache.
+		$cache = Page_Cache::status();
+		echo '<section class="shd-card">';
+		echo '<h2>' . esc_html__( 'Page cache', 'shd-performance' ) . '</h2>';
+		echo '<p class="shd-stats">' . self::cache_badge( $cache ) . '</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- badge escapes.
+		echo '<p>' . esc_html( self::cache_summary( $cache ) ) . '</p>';
+		echo '<p><a class="button' . ( 'active' === $cache['state'] ? '' : ' button-primary' ) . '" href="' . esc_url( self::url( 'cache' ) ) . '">' . esc_html__( 'Page cache', 'shd-performance' ) . '</a></p>';
 		echo '</section>';
 
 		// Checklist.
@@ -1010,6 +1065,134 @@ final class Admin {
 	}
 
 	/* ------------------------------------------------------------------
+	 * Page cache
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * @param array $status Page cache status.
+	 * @return string HTML.
+	 */
+	private static function cache_badge( array $status ) {
+		switch ( $status['state'] ) {
+			case 'active':
+				return self::badge( 'good', __( 'Active', 'shd-performance' ) );
+			case 'blocked':
+				return self::badge( 'warn', __( 'Waiting', 'shd-performance' ) );
+			case 'off':
+				return self::badge( 'off', __( 'Off', 'shd-performance' ) );
+			default:
+				return self::badge( 'bad', __( 'Not working', 'shd-performance' ) );
+		}
+	}
+
+	/**
+	 * One sentence about the page cache state.
+	 *
+	 * @param array $status Page cache status.
+	 * @return string
+	 */
+	private static function cache_summary( array $status ) {
+		if ( 'active' === $status['state'] ) {
+			$delivery = array(
+				'htaccess' => __( 'Stored pages are sent directly by the web server (Apache, .htaccess), without PHP and WordPress.', 'shd-performance' ),
+				'php'      => __( 'Stored pages are sent by a small PHP file (wp-content/advanced-cache.php) before WordPress loads.', 'shd-performance' ),
+				'plugin'   => __( 'Stored pages are sent after WordPress has loaded its plugins: faster than without a cache, but see the note on the Page cache tab.', 'shd-performance' ),
+			);
+			return isset( $delivery[ $status['delivery'] ] ) ? $delivery[ $status['delivery'] ] : '';
+		}
+		if ( 'blocked' === $status['state'] && 'Kadence Performance' === $status['blocker'] ) {
+			return __( 'Kadence Performance is still active and runs the page cache. Deactivate it: SHD Performance then takes over the page cache automatically.', 'shd-performance' );
+		}
+		if ( 'blocked' === $status['state'] && 'advanced-cache.php' === $status['blocker'] ) {
+			return __( 'Another plugin’s wp-content/advanced-cache.php is in place. Only one page cache can run; deactivate the other cache plugin (it removes its file), then save the page cache settings here.', 'shd-performance' );
+		}
+		if ( 'blocked' === $status['state'] ) {
+			/* translators: %s: plugin name */
+			return sprintf( __( '%s is active and brings its own page cache. Only one page cache can run: deactivate it to use the SHD page cache, or switch the SHD page cache off.', 'shd-performance' ), $status['blocker'] );
+		}
+		if ( 'off' === $status['state'] ) {
+			return __( 'Switched off: every visit waits for WordPress to build the page.', 'shd-performance' );
+		}
+		return implode( ' ', (array) $status['notes'] );
+	}
+
+	private function tab_cache() {
+		$settings = Settings::get();
+		$status   = Page_Cache::status();
+
+		echo '<div class="shd-intro"><p>' . esc_html__( 'Stores every page as a finished file, with all optimizations applied. The next visitors get that file in a few milliseconds instead of waiting about 2.5 seconds for WordPress to build the page. Logged-in users, form submissions and addresses with parameters always get a fresh page. Replaces the page cache of Kadence Performance.', 'shd-performance' ) . '</p></div>';
+
+		echo '<div class="shd-grid shd-grid--2">';
+		echo '<section class="shd-card">';
+		echo '<h2>' . esc_html__( 'Status', 'shd-performance' ) . ' ' . self::cache_badge( $status ) . '</h2>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- badge escapes.
+		echo '<p>' . esc_html( self::cache_summary( $status ) ) . '</p>';
+		if ( 'blocked' === $status['state'] && 'Kadence Performance' === $status['blocker'] ) {
+			echo '<ol class="shd-steps">';
+			echo '<li>' . esc_html__( 'Plugins → Kadence Performance → Deactivate. It removes its own cache rules and its wp-content/advanced-cache.php.', 'shd-performance' ) . '</li>';
+			echo '<li>' . esc_html__( 'SHD Performance installs its page cache in the same moment (advanced-cache.php, rules at the top of .htaccess) and caches every page in the background within a few minutes. WP_CACHE stays switched on in wp-config.php.', 'shd-performance' ) . '</li>';
+			echo '<li>' . esc_html__( 'Come back here: the status should be “Active”. Then run the health checks on the Tools tab.', 'shd-performance' ) . '</li>';
+			echo '<li>' . esc_html__( 'Afterwards you can delete Kadence Performance and its old cache folder wp-content/cache/solid-performance.', 'shd-performance' ) . '</li>';
+			echo '</ol>';
+			echo '<p><a class="button button-primary" href="' . esc_url( admin_url( 'plugins.php' ) ) . '">' . esc_html__( 'Go to Plugins', 'shd-performance' ) . '</a></p>';
+		}
+		if ( 'active' === $status['state'] && ! empty( $status['notes'] ) ) {
+			echo '<ul class="shd-list">';
+			foreach ( (array) $status['notes'] as $note ) {
+				echo '<li>' . esc_html( $note ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		if ( 'active' === $status['state'] ) {
+			$stats = Page_Cache::stats();
+			echo '<table class="widefat striped shd-table"><tbody>';
+			echo '<tr><th scope="row">' . esc_html__( 'Stored pages', 'shd-performance' ) . '</th><td>' . esc_html( sprintf( '%s (%s)', number_format_i18n( $stats['pages'] ), size_format( $stats['bytes'] ) ) ) . '</td></tr>';
+			echo '<tr><th scope="row">' . esc_html__( 'Waiting to be cached', 'shd-performance' ) . '</th><td>' . esc_html( number_format_i18n( $stats['queue'] ) ) . '</td></tr>';
+			echo '<tr><th scope="row">' . esc_html__( 'Last cleared', 'shd-performance' ) . '</th><td>' . esc_html( $stats['purged'] > 0 ? self::when( (int) $stats['purged'] ) : '—' ) . '</td></tr>';
+			echo '</tbody></table>';
+			echo '<div class="shd-actions">';
+			$this->button( 'purge', __( 'Clear the page cache', 'shd-performance' ), array( 'tab' => 'cache' ) );
+			echo ' ';
+			$this->button( 'cache_preload', __( 'Cache all pages now', 'shd-performance' ) );
+			echo '</div>';
+		}
+		echo '</section>';
+
+		echo '<section class="shd-card">';
+		echo '<h2>' . esc_html__( 'Cleared automatically when', 'shd-performance' ) . '</h2>';
+		echo '<ul class="shd-list">';
+		foreach (
+			array(
+				__( 'a page or post is published, updated, unpublished or deleted;', 'shd-performance' ),
+				__( 'you save in Elementor: pages, templates, header and footer, popups, site settings (global colours and fonts), and when display conditions change;', 'shd-performance' ),
+				__( 'you press Elementor → Tools → “Clear Files & Data”;', 'shd-performance' ),
+				__( 'menus, widgets, the Customizer, the theme, permalinks or the site title change;', 'shd-performance' ),
+				__( 'plugins or themes are updated, switched on or off;', 'shd-performance' ),
+				__( 'you save settings in SHD Performance.', 'shd-performance' ),
+			) as $item
+		) {
+			echo '<li>' . esc_html( $item ) . '</li>';
+		}
+		echo '</ul>';
+		echo '<p>' . esc_html__( 'Afterwards every page is cached again in the background. A new comment only clears its own post.', 'shd-performance' ) . '</p>';
+		echo '<h3>' . esc_html__( 'Elementor’s Element Cache', 'shd-performance' ) . '</h3>';
+		echo '<p>' . esc_html__( 'Elementor → Settings → Performance → “Element Cache” keeps the rendered widgets in the database (default: 1 day). That makes building a page faster, but WordPress still starts for every visit, so it does not replace a page cache. The two work together: visitors get the stored page from here, and when a page has to be built again, Element Cache makes that faster. Keep it on.', 'shd-performance' ) . '</p>';
+		echo '<p>' . esc_html__( 'If a change does not show up, press Elementor → Tools → “Clear Files & Data”: it clears Elementor’s caches and generated CSS files, and the page cache here with them.', 'shd-performance' ) . '</p>';
+		echo '</section>';
+		echo '</div>';
+
+		$this->form_open( 'cache_save' );
+		echo '<h2>' . esc_html__( 'Settings', 'shd-performance' ) . '</h2>';
+		echo '<table class="form-table" role="presentation"><tbody>';
+		echo '<tr><th scope="row">' . esc_html__( 'Page cache', 'shd-performance' ) . '</th><td><input type="hidden" name="shd[page_cache]" value="0"><label><input type="checkbox" name="shd[page_cache]" value="1"' . checked( ! empty( $settings['page_cache'] ), true, false ) . '> ' . esc_html__( 'Store pages and send them without starting WordPress', 'shd-performance' ) . '</label></td></tr>';
+		$this->number_row( 'cache_ttl', __( 'Keep pages for (hours)', 'shd-performance' ), $settings['cache_ttl'], 1, 12, __( 'Pages are rebuilt in the background before they expire. At most 12 hours: the pages contain security tokens for the forms and the newsletter sign-up, which WordPress accepts for 12 to 24 hours.', 'shd-performance' ) );
+		echo '<tr><th scope="row">' . esc_html__( 'Ad and campaign links', 'shd-performance' ) . '</th><td><input type="hidden" name="shd[cache_campaign]" value="0"><label><input type="checkbox" name="shd[cache_campaign]" value="1"' . checked( ! empty( $settings['cache_campaign'] ), true, false ) . '> ' . esc_html__( 'Send the cached page to addresses that only add marketing parameters (?gclid=…, ?utm_…, ?fbclid=…)', 'shd-performance' ) . '</label>';
+		echo '<p class="description">' . esc_html__( 'Visitors from Google Ads and campaigns then get the fast page too. Switch this on only after the checklist task “Load Google Analytics 4 from one place”: MonsterInsights writes the address of the request into the page on the server, so on a cached page it would not see the gclid. The tracking scripts in the browser still read the parameters from the address.', 'shd-performance' ) . '</p></td></tr>';
+		$this->lines_row( 'cache_exclude', __( 'Never cache', 'shd-performance' ), $settings['cache_exclude'], __( 'One address path per line, for example /kontakt/ (also excludes the pages below it). * matches anything, for example /blog/*/print/.', 'shd-performance' ) );
+		echo '</tbody></table>';
+		echo '<p class="submit"><button type="submit" class="button button-primary">' . esc_html__( 'Save page cache settings', 'shd-performance' ) . '</button></p></form>';
+	}
+
+	/* ------------------------------------------------------------------
 	 * Fonts
 	 * ------------------------------------------------------------------ */
 
@@ -1242,9 +1425,10 @@ final class Admin {
 		$this->tools_scan();
 
 		echo '<h2>' . esc_html__( 'Page cache', 'shd-performance' ) . '</h2>';
-		echo '<p>' . esc_html__( 'Cached pages keep the version from when they were cached. The cache is cleared automatically when you save settings here; use this after changing something elsewhere (for example a plugin setting).', 'shd-performance' ) . '</p>';
+		echo '<p>' . esc_html__( 'Clears the SHD page cache (and any other page cache plugin that is active) and the rewritten CSS copies. Content changes clear the page cache automatically; use this after changing something elsewhere, for example a plugin setting.', 'shd-performance' ) . '</p>';
 		echo '<div class="shd-actions">';
 		$this->button( 'purge', __( 'Clear the page cache', 'shd-performance' ) );
+		echo ' <a class="button-link" href="' . esc_url( self::url( 'cache' ) ) . '">' . esc_html__( 'Page cache status and settings', 'shd-performance' ) . '</a>';
 		echo '</div>';
 
 		echo '<h2 id="transfer">' . esc_html__( 'Export and import settings', 'shd-performance' ) . '</h2>';
@@ -1268,7 +1452,7 @@ final class Admin {
 			esc_html_e( 'none', 'shd-performance' );
 		}
 		echo '</td></tr>';
-		echo '<tr><th scope="row">' . esc_html__( 'Emergency switch', 'shd-performance' ) . '</th><td>' . esc_html__( 'If the dashboard cannot be reached, add define( \'SHD_PERFORMANCE_DISABLE\', true ); to wp-config.php, or deactivate the plugin: every optimization stops immediately (clear the page cache afterwards).', 'shd-performance' ) . '</td></tr>';
+		echo '<tr><th scope="row">' . esc_html__( 'Emergency switch', 'shd-performance' ) . '</th><td>' . esc_html__( 'If the dashboard cannot be reached, add define( \'SHD_PERFORMANCE_DISABLE\', true ); to wp-config.php, or deactivate the plugin: every optimization stops immediately, and the stored pages are no longer sent from the first page that WordPress builds after that. To stop them at once without WordPress, delete the folder wp-content/cache/shd-performance/pages (for example by FTP).', 'shd-performance' ) . '</td></tr>';
 		echo '</tbody></table>';
 	}
 

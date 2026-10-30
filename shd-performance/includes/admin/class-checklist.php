@@ -26,7 +26,6 @@ final class Checklist {
 		$home      = home_url( '/' );
 		$psi       = 'https://pagespeed.web.dev/analysis?url=';
 		$elementor = admin_url( 'admin.php?page=elementor-settings' );
-		$kadence   = admin_url( 'options-general.php?page=swpsp-settings' );
 
 		return array(
 			array(
@@ -50,51 +49,42 @@ final class Checklist {
 					__( 'Check: header menu and mobile menu, every form (send a test message), cookie banner (accept and reject), the homepage video, carousels, blog table of contents, chat widget, the map on /kontakt/ and the timeline on /geo-agentur/.', 'shd-performance' ),
 					__( 'Open the browser console (F12) and look for red errors.', 'shd-performance' ),
 					__( 'If everything works, press “Switch all Test features to Live” on the Optimizations tab. If one thing breaks, set only that feature to Off and tell us which.', 'shd-performance' ),
-					__( 'SHD Performance clears the Kadence Performance cache by itself whenever you save here. Then press “Preload & Refresh All” in Settings → Kadence Performance, so the first visitors also get cached pages.', 'shd-performance' ),
+					__( 'Whenever you save here, SHD Performance clears its page cache and caches every page again in the background.', 'shd-performance' ),
 				),
-				'links' => array( 'Kadence Performance' => $kadence ),
 				'auto'  => array( __CLASS__, 'auto_preview' ),
 			),
 			array(
-				'id'    => 'cache-mobile',
+				'id'    => 'page-cache',
 				'group' => __( 'Caching and server', 'shd-performance' ),
-				'title' => __( 'Serve the page cache to phones too', 'shd-performance' ),
-				'why'   => __( 'Measured: 62 of 63 pages answered a phone’s first request with a cache MISS (2.8 s median) while desktop got a HIT in 0.4 s. Google tests the mobile version. Cause: “Mobile Cache” keeps a separate copy for phones, but the Kadence Performance preloader only fetches pages as a desktop browser, so the phone copy only exists after a phone has visited that page.', 'shd-performance' ),
+				'title' => __( 'Switch from Kadence Performance to the SHD page cache', 'shd-performance' ),
+				'why'   => __( 'SHD Performance now has its own page cache, so Kadence Performance is no longer needed. It fixes what we measured with Kadence Performance: 62 of 63 pages answered a phone’s first request with a cache MISS (2.8 s median), because its “Mobile Cache” kept a separate copy for phones that its preloader never filled; its “Lazy Load Images” delayed the video cover on /google-ads-agentur/; and its preloader made MonsterInsights report addresses ending in “?swpsp_cache_bust=1&nocache=1”. The SHD page cache keeps one copy for phones and computers (the site sends both the same HTML), fills it in the background with the plain addresses, and is cleared when you save in Elementor or press Elementor’s “Clear Files & Data”.', 'shd-performance' ),
 				'steps' => array(
-					__( 'Settings → Kadence Performance: turn off “Mobile Cache” (Store separate caches for mobile devices) and save. Safe here: the site sends phones and computers the same HTML (checked on the homepage; the only difference is an unused Qi Addons body class).', 'shd-performance' ),
-					__( 'Kadence Performance clears its cache when this setting changes. Press “Preload & Refresh All” so every page is cached again.', 'shd-performance' ),
-					__( 'When the preload has finished, run the health checks on the Tools tab: “Page cache, phone visitors” should show HIT on the first request.', 'shd-performance' ),
+					__( 'Plugins → Kadence Performance → Deactivate. Kadence removes its cache rules and its wp-content/advanced-cache.php; SHD Performance installs its page cache in the same moment and caches every page in the background within a few minutes.', 'shd-performance' ),
+					__( 'Open SHD Performance → Page cache: the status should be “Active”, with pages sent directly by the web server (.htaccess). If a note asks you to change wp-config.php or .htaccess, do that (or ask your host).', 'shd-performance' ),
+					__( 'Run the health checks on the Tools tab: “SHD page cache” and “Page cache, phone visitors” should be green, with HIT on the first phone request.', 'shd-performance' ),
+					__( 'Check a page in a private window: open the browser’s developer tools (F12) → Network → reload → click the page: the response header x-shd-cache shows “HIT (htaccess)”.', 'shd-performance' ),
+					__( 'Then delete Kadence Performance (Plugins → Delete) and, by FTP or your host’s file manager, its old cache folder wp-content/cache/solid-performance. Leave define( \'WP_CACHE\', true ); in wp-config.php.', 'shd-performance' ),
+					__( 'Keep Elementor’s own “Element Cache” (Elementor → Settings → Performance) on: it makes rebuilding a page faster and works together with the page cache.', 'shd-performance' ),
 				),
-				'links' => array( 'Kadence Performance' => $kadence ),
-				'auto'  => array( __CLASS__, 'auto_health' ),
-				'check' => array( 'kadence_mobile_cache', 'cache_mobile' ),
-			),
-			array(
-				'id'    => 'cache-lazy-images',
-				'group' => __( 'Caching and server', 'shd-performance' ),
-				'title' => __( 'Turn off “Lazy Load Images” in Kadence Performance', 'shd-performance' ),
-				'why'   => __( 'This option only lazy-loads inline background images, which on this site are the cover images of the videos on /google-ads-agentur/ and /web-design-agentur/. It loads them with an extra script after the page, so on phones the video cover in the first screen of /google-ads-agentur/ (your ads landing page) appears late and becomes the slowest element (LCP). Normal images are already lazy-loaded by WordPress, and SHD Performance keeps the main image fast, so nothing else changes.', 'shd-performance' ),
-				'steps' => array(
-					__( 'Settings → Kadence Performance: turn off “Lazy Load Images” and save.', 'shd-performance' ),
-					__( 'Press “Preload & Refresh All”.', 'shd-performance' ),
+				'links' => array(
+					__( 'Plugins', 'shd-performance' )    => admin_url( 'plugins.php' ),
+					__( 'Page cache', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=cache' ),
 				),
-				'links' => array( 'Kadence Performance' => $kadence ),
-				'auto'  => array( __CLASS__, 'auto_health' ),
-				'check' => 'kadence_lazy_images',
+				'auto'  => array( __CLASS__, 'auto_page_cache' ),
 			),
 			array(
 				'id'       => 'cache-query-params',
 				'group'    => __( 'Caching and server', 'shd-performance' ),
 				'title'    => __( 'Optional: let ad and campaign links use the cache', 'shd-performance' ),
 				'optional' => true,
-				'why'      => __( 'Kadence Performance never caches an address with a query string, and it has no setting to ignore marketing parameters. So every visitor from Google Ads (?gclid=…) or a campaign (?utm_…) waits for WordPress to build the page (about 2.5 s). PageSpeed tests the plain address, so this does not change the score, but it affects the real-visitor Core Web Vitals of your paid traffic.', 'shd-performance' ),
+				'why'      => __( 'Addresses with a query string are not served from the cache by default, so every visitor from Google Ads (?gclid=…) or a campaign (?utm_…) waits for WordPress to build the page (about 2.5 s). PageSpeed tests the plain address, so this does not change the score, but it affects the real-visitor Core Web Vitals of your paid traffic.', 'shd-performance' ),
 				'steps'    => array(
 					__( 'Do the “Load Google Analytics 4 from one place” task first: MonsterInsights writes the full address, including gclid, into the page on the server, so a cached copy would hide the gclid from it.', 'shd-performance' ),
-					__( 'Then ask your host (or use a CDN, see below) to serve cached pages when the query string only contains marketing parameters: utm_source, utm_medium, utm_campaign, utm_term, utm_content, gclid, gbraid, wbraid, gad_source, gad_campaignid, fbclid, msclkid, li_fat_id.', 'shd-performance' ),
+					__( 'Then switch on SHD Performance → Page cache → “Ad and campaign links”. Addresses that only add marketing parameters (utm_…, gclid, gbraid, wbraid, gad_source, gad_campaignid, fbclid, msclkid, li_fat_id and a few more) then get the cached page; the tracking scripts in the browser still read the parameters.', 'shd-performance' ),
 					__( 'Afterwards, check in Google Ads and GA4 that conversions and paid sessions are still attributed correctly.', 'shd-performance' ),
 				),
-				'auto'     => array( __CLASS__, 'auto_health' ),
-				'check' => 'cache_campaign',
+				'links'    => array( __( 'Page cache', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=cache' ) ),
+				'auto'     => array( __CLASS__, 'auto_campaign' ),
 			),
 			array(
 				'id'    => 'server-ttfb',
@@ -232,7 +222,7 @@ final class Checklist {
 				'id'    => 'tracking-ga',
 				'group' => __( 'Tracking and consent', 'shd-performance' ),
 				'title' => __( 'Load Google Analytics 4 from one place', 'shd-performance' ),
-				'why'   => __( 'MonsterInsights and SHD Tracking Manager both configure the same GA4 property. That is extra JavaScript and can count page views twice. In our test, MonsterInsights also sent a GA4 hit before any cookie choice was made. And on cached pages it reports a wrong address to GA4: it writes the address of the request that filled the cache into the page, which for the Kadence Performance preloader ends in “?swpsp_cache_bust=1&nocache=1”. That splits your page reports.', 'shd-performance' ),
+				'why'   => __( 'MonsterInsights and SHD Tracking Manager both configure the same GA4 property. That is extra JavaScript and can count page views twice. In our test, MonsterInsights also sent a GA4 hit before any cookie choice was made. And on cached pages it reports the address of the request that filled the cache: with the Kadence Performance preloader that ended in “?swpsp_cache_bust=1&nocache=1” and split your page reports (the SHD page cache requests the plain address).', 'shd-performance' ),
 				'steps' => array(
 					__( 'Keep the consent-aware setup in SHD Tracking Manager (it also sends the Google Ads conversions) and turn off GA4 in MonsterInsights, or deactivate MonsterInsights if you do not use its reports.', 'shd-performance' ),
 					__( 'Check GA4 → Realtime / DebugView that page views arrive once.', 'shd-performance' ),
@@ -468,6 +458,29 @@ final class Checklist {
 		return array(
 			'status' => 'good' === $result['status'] ? 'done' : ( 'info' === $result['status'] ? 'unknown' : 'open' ),
 			'note'   => $result['value'],
+		);
+	}
+
+	public static function auto_page_cache() {
+		$status = Page_Cache::status();
+		if ( 'active' === $status['state'] ) {
+			return array(
+				'status' => 'plugin' === $status['delivery'] ? 'open' : 'done',
+				'note'   => 'htaccess' === $status['delivery'] ? __( 'Active; pages are sent directly by the web server.', 'shd-performance' ) : ( 'php' === $status['delivery'] ? __( 'Active; pages are sent before WordPress loads.', 'shd-performance' ) : implode( ' ', (array) $status['notes'] ) ),
+			);
+		}
+		return array(
+			'status' => 'open',
+			/* translators: %s: plugin name */
+			'note'   => 'blocked' === $status['state'] && '' !== $status['blocker'] ? sprintf( __( '%s is still active.', 'shd-performance' ), $status['blocker'] ) : implode( ' ', (array) $status['notes'] ),
+		);
+	}
+
+	public static function auto_campaign() {
+		$on = ! empty( Settings::get()['cache_campaign'] );
+		return array(
+			'status' => $on ? 'done' : 'open',
+			'note'   => $on ? __( 'Ad and campaign links get the cached page.', 'shd-performance' ) : __( 'Ad and campaign links wait for WordPress.', 'shd-performance' ),
 		);
 	}
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * Purge page caches after settings change.
+ * Purge page caches after settings change: our own and those of other cache plugins.
  *
  * @package SHD\Performance
  */
@@ -19,7 +19,10 @@ final class Cache {
 	public static function purge_all() {
 		$purged = array();
 
-		// Kadence Performance (formerly Solid Performance), the page cache on sh-digital.ch.
+		if ( Page_Cache::purge() ) {
+			$purged[] = __( 'SHD Performance page cache (refilled in the background)', 'shd-performance' );
+		}
+		// Kadence Performance (formerly Solid Performance), the previous page cache on sh-digital.ch.
 		if ( has_action( 'solidwp/performance/purge/all' ) ) {
 			do_action( 'solidwp/performance/purge/all' );
 			$purged[] = 'Kadence Performance';

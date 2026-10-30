@@ -229,6 +229,10 @@ final class Settings {
 			'youtube_label'         => '',
 			'rum_sample'            => 100,
 			'redirect_domains'      => array( 'shdigital.ch', 'sh-digital.ch' ),
+			'page_cache'            => true,
+			'cache_ttl'             => 10,
+			'cache_campaign'        => false,
+			'cache_exclude'         => array(),
 			'preview_token'         => '',
 			'fonts'                 => array(
 				'faces'   => array(),

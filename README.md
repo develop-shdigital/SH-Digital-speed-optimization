@@ -47,6 +47,8 @@ Each finished page (with all optimizations applied) is stored as a file in `wp-c
 - on Apache, directly from the web server through rules at the top of `.htaccess`, without PHP or WordPress (about 1 ms on the server);
 - elsewhere, from `wp-content/advanced-cache.php`, before WordPress loads.
 
+Pages are stored plain and gzipped. If Apache has its Brotli module, the plugin switches it on for text files, and once a check confirms that the server compresses stored pages with Brotli, browsers that accept it get those instead of the gzip copies (checked daily; it falls back to gzip by itself).
+
 Logged-in users, password-protected posts, form submissions, searches, 404 pages and addresses with parameters always get a fresh page from WordPress. Addresses that only add marketing parameters (`?gclid=…`, `?utm_…`) can get the cached page too; that option is off until Google Analytics is loaded from one place (see the checklist).
 
 Stored pages live for 10 hours at most, because the forms and the newsletter sign-up contain WordPress security tokens that expire after 12–24 hours. They are rebuilt in the background before they expire. Every public page (home, pages, posts, categories) is also cached in the background right after the cache is cleared, so the first visitor and Google's test get a stored page.

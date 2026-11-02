@@ -253,6 +253,7 @@ final class Settings {
 			'page_cache'            => true,
 			'cache_ttl'             => 10,
 			'cache_campaign'        => false,
+			'cache_brotli'          => true,
 			'cache_exclude'         => array(),
 			'preview_token'         => '',
 			'fonts'                 => array(

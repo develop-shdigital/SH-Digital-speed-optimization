@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,6 +38,7 @@ Page cache (replaces Kadence Performance):
 * Cleared when content changes, including Elementor saves (pages, templates, site settings) and Elementor's "Clear Files & Data". Works together with Elementor's Element Cache.
 * Logged-in users, form submissions, password-protected posts, searches and addresses with parameters always get a fresh page. Ad and campaign links can optionally get the cached page.
 * Waits while Kadence Performance (or another page cache plugin) is active, and takes over when it is deactivated.
+* Brotli: if Apache has its Brotli module, it is switched on for text files; stored pages use the server's Brotli once a daily check confirms it, and the stored gzip copies otherwise.
 
 Images tab: replace the file of an image once and every page, template, header, footer and setting that uses it shows the new file. "Make lighter" turns the current file into a WebP file with the same dimensions (compare before using it); or upload your own file. The image keeps its ID, title and alt text, Elementor's CSS and the page cache are cleared, and each replacement can be undone until the old files are deleted.
 
@@ -74,6 +75,11 @@ SHD Performance → Images (or "Replace file" in the Media Library). Choose "Use
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.4.1 =
+* Text compression check: tests a static file instead of the homepage (which comes from the page cache's own gzip copies, so it always showed gzip), and shows the server software and whether HTTP/3 is offered.
+* Brotli: if Apache has its Brotli module, the page cache's .htaccess block switches it on for text files. Browsers that accept Brotli no longer get gzip, which the server would otherwise always choose first. Stored pages use the server's Brotli once a check shows that it really compresses them (with the health checks and daily); otherwise the stored gzip copies are sent. Setting: Page cache tab → Brotli.
+* Checklist: the Brotli and HTTP/3 task is optional and under "Caching and server", with steps for Apache, for nginx in front of Apache, and for HTTP/3, which Apache cannot do.
 
 = 1.4.0 =
 * Images tab and "Replace file" in the Media Library: make an image lighter (WebP with the same dimensions, side-by-side comparison, quality 80–95) or upload a new file; every page, Elementor document, template, setting and term that links to the old files is switched to the new ones. Undo, and deleting the old files once nothing links to them.

@@ -206,24 +206,54 @@ final class Health_Checks {
 	}
 
 	private static function compression_result() {
-		// Headers only: WordPress' HTTP client cannot decode Brotli bodies.
-		$response = wp_remote_head(
-			home_url( '/' ),
+		// A static file shows what the web server does (the homepage comes from the page cache,
+		// which keeps its own gzip copies). Only the headers count; the body stays compressed.
+		$response = wp_remote_get(
+			includes_url( 'css/dashicons.min.css' ),
 			array(
 				'timeout'    => 15,
+				'decompress' => false,
 				'user-agent' => self::UA_DESKTOP,
 				'sslverify'  => apply_filters( 'https_local_ssl_verify', false ),
-				'headers'    => array( 'Accept-Encoding' => 'br, gzip' ),
+				'headers'    => array( 'Accept-Encoding' => 'gzip, deflate, br' ),
 			)
 		);
-		$encoding = is_wp_error( $response ) ? '' : strtolower( (string) wp_remote_retrieve_header( $response, 'content-encoding' ) );
+		$header   = static function ( $name ) use ( $response ) {
+			$value = is_wp_error( $response ) ? '' : wp_remote_retrieve_header( $response, $name );
+			return strtolower( trim( is_array( $value ) ? implode( ', ', $value ) : (string) $value ) );
+		};
+		$encoding = $header( 'content-encoding' );
+		$server   = self::server_name( $header( 'server' ) );
+		$http3    = false !== strpos( $header( 'alt-svc' ), 'h3' );
+		$pages    = Page_Cache::check_brotli();
+		$value    = sprintf(
+			/* translators: 1: encoding of files, 2: encoding of stored pages, 3: yes/no, 4: server software */
+			__( 'files: %1$s · stored pages: %2$s · HTTP/3: %3$s · server: %4$s', 'shd-performance' ),
+			'' !== $encoding ? $encoding : __( 'none', 'shd-performance' ),
+			null === $pages ? '—' : ( $pages ? 'br' : 'gzip' ),
+			$http3 ? __( 'yes', 'shd-performance' ) : __( 'no', 'shd-performance' ),
+			$server
+		);
 		return array(
 			'label'  => __( 'Text compression', 'shd-performance' ),
-			'status' => false !== strpos( $encoding, 'br' ) ? 'good' : ( false !== strpos( $encoding, 'gzip' ) ? 'warn' : 'bad' ),
-			'value'  => '' !== $encoding ? $encoding : __( 'none detected', 'shd-performance' ),
-			'detail' => __( 'Brotli makes HTML, CSS and JavaScript about 15–20% smaller than gzip.', 'shd-performance' ),
+			'status' => 'br' === $encoding ? 'good' : ( 'gzip' === $encoding ? 'warn' : 'bad' ),
+			'value'  => $value,
+			'detail' => __( 'Brotli makes HTML, CSS and JavaScript about 15–20% smaller than gzip; HTTP/3 speeds up connections on mobile networks. Both are settings of the web server (see the checklist).', 'shd-performance' ),
 			'task'   => 'compression',
 		);
+	}
+
+	/**
+	 * @param string $header Server header.
+	 * @return string The web server software, as far as the header tells.
+	 */
+	private static function server_name( $header ) {
+		foreach ( array( 'nginx' => 'nginx', 'apache' => 'Apache', 'litespeed' => 'LiteSpeed', 'cloudflare' => 'Cloudflare', 'openresty' => 'OpenResty (nginx)', 'caddy' => 'Caddy', 'microsoft-iis' => 'IIS' ) as $needle => $name ) {
+			if ( false !== strpos( $header, $needle ) ) {
+				return $name;
+			}
+		}
+		return '' !== $header ? sanitize_text_field( substr( $header, 0, 40 ) ) : __( 'not shown', 'shd-performance' );
 	}
 
 	private static function ga_result( array $response ) {

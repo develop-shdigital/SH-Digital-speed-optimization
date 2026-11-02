@@ -21,6 +21,10 @@ final class Page_Cache {
 
 	const MARKER        = 'SHD Performance page cache';
 	const HTACCESS_TAG  = 'SHD Performance';
+	const BROTLI_OPT    = 'shd_perf_server_brotli';
+
+	/** Response types compressed with Brotli (at least everything a typical gzip setup covers). */
+	const BROTLI_TYPES = array( 'text/html', 'text/plain', 'text/css', 'text/xml', 'text/javascript', 'text/csv', 'text/calendar', 'text/markdown', 'text/x-component', 'application/javascript', 'application/x-javascript', 'application/json', 'application/ld+json', 'application/manifest+json', 'application/xml', 'application/xhtml+xml', 'application/rss+xml', 'application/atom+xml', 'application/rdf+xml', 'application/vnd.ms-fontobject', 'application/x-font-ttf', 'application/x-font-opentype', 'application/wasm', 'font/ttf', 'font/otf', 'font/opentype', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/bmp' );
 	const WP_CACHE_NOTE = '// Added by SHD Performance (page cache)';
 	const STATUS_OPT    = 'shd_perf_cache_status';
 	const QUEUE_OPT     = 'shd_perf_cache_queue';
@@ -1050,6 +1054,8 @@ final class Page_Cache {
 					self::host(),
 					self::ttl(),
 					! empty( Settings::get()['cache_campaign'] ),
+					self::brotli_wanted(),
+					self::server_brotli(),
 					self::exclude_patterns(),
 					self::blocker(),
 					(string) get_option( 'permalink_structure' ),
@@ -1190,6 +1196,7 @@ final class Page_Cache {
 			'ttl'             => self::ttl(),
 			'charset'         => '' !== $charset ? $charset : 'UTF-8',
 			'campaign'        => ! empty( Settings::get()['cache_campaign'] ),
+			'server_br'       => self::server_brotli(),
 			'campaign_params' => self::CAMPAIGN_PARAMS,
 			'bypass_cookies'  => self::BYPASS_COOKIES,
 			'exclude'         => self::exclude_patterns(),
@@ -1336,7 +1343,8 @@ final class Page_Cache {
 		$url     = addcslashes( (string) wp_parse_url( content_url( '/cache/shd-performance/pages/' . $host ), PHP_URL_PATH ), '\\"$%' );
 		$cookies = implode( '|', array_map( 'preg_quote', self::BYPASS_COOKIES ) );
 		$target  = '%{REQUEST_URI}index-%{ENV:SHD_CACHE_SCHEME}.%{ENV:SHD_CACHE_EXT}';
-		return "# Pages stored by the SHD Performance page cache are sent without starting WordPress.\n"
+		return self::brotli_rules()
+			. "# Pages stored by the SHD Performance page cache are sent without starting WordPress.\n"
 			. "<IfModule mod_rewrite.c>\n"
 			. "RewriteEngine On\n"
 			. "RewriteRule ^ - [E=SHD_CACHE_SCHEME:http,E=SHD_CACHE_EXT:html]\n"
@@ -1345,6 +1353,8 @@ final class Page_Cache {
 			. "RewriteCond %{HTTP:X-Forwarded-Proto} =https [NC]\n"
 			. "RewriteRule ^ - [E=SHD_CACHE_SCHEME:https]\n"
 			. "RewriteCond %{HTTP:Accept-Encoding} gzip [NC]\n"
+			// Browsers that accept Brotli get the plain copy when the server compresses it with Brotli (see check_brotli()).
+			. ( self::server_brotli() ? "RewriteCond %{HTTP:Accept-Encoding} !(^|,)\\s*br\\s*(;|,|$) [NC]\n" : '' )
 			. "RewriteRule ^ - [E=SHD_CACHE_EXT:html.gz]\n"
 			. "RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$\n"
 			. "RewriteCond %{QUERY_STRING} ^$\n"
@@ -1355,6 +1365,121 @@ final class Page_Cache {
 			. 'RewriteCond "' . $files . $target . "\" -f\n"
 			. 'RewriteRule ^ "' . $url . $target . "\" [L]\n"
 			. "</IfModule>\n";
+	}
+
+	/**
+	 * Brotli for text files where Apache has the module; without it the block does nothing.
+	 * Browsers that accept Brotli are not given gzip (no-gzip): the server's gzip filter
+	 * usually runs first and would otherwise always win. Both lines need mod_filter, so
+	 * they are switched on together or not at all.
+	 *
+	 * @return string
+	 */
+	private static function brotli_rules() {
+		if ( ! self::brotli_wanted() ) {
+			return '';
+		}
+		return "# Brotli for text files where Apache has the module (otherwise nothing changes).\n"
+			. "<IfModule mod_brotli.c>\n"
+			. "<IfModule mod_filter.c>\n"
+			. "<IfModule mod_setenvif.c>\n"
+			. 'AddOutputFilterByType BROTLI_COMPRESS ' . implode( ' ', self::BROTLI_TYPES ) . "\n"
+			. "SetEnvIfNoCase Accept-Encoding (^|,)\\s*br\\s*(;|,|$) no-gzip\n"
+			. "</IfModule>\n"
+			. "</IfModule>\n"
+			. "</IfModule>\n";
+	}
+
+	/**
+	 * @return bool Whether the Brotli setting is on.
+	 */
+	private static function brotli_wanted() {
+		return ! empty( Settings::get()['cache_brotli'] );
+	}
+
+	/**
+	 * @return bool Whether the server was found to compress stored pages with Brotli.
+	 */
+	public static function server_brotli() {
+		$check = self::brotli_status();
+		return self::brotli_wanted() && $check['on'];
+	}
+
+	/**
+	 * @return array{on:bool,time:int} Result of the last check_brotli().
+	 */
+	public static function brotli_status() {
+		$check = get_option( self::BROTLI_OPT );
+		return array(
+			'on'   => is_array( $check ) && ! empty( $check['on'] ),
+			'time' => is_array( $check ) && isset( $check['time'] ) ? (int) $check['time'] : 0,
+		);
+	}
+
+	/**
+	 * Does the server compress a stored page with Brotli when the page cache sends it
+	 * uncompressed? Asked with a request that accepts only Brotli (so the stored gzip copy is
+	 * not used), and, once Brotli is in use, also as a browser asks (gzip and Brotli), which
+	 * must then arrive as Brotli. Runs daily and with the health checks; when the answer
+	 * changes, the delivery rules are written again.
+	 *
+	 * @return bool|null Null when it could not be checked.
+	 */
+	public static function check_brotli() {
+		if ( ! self::serving() || ! self::brotli_wanted() ) {
+			return null;
+		}
+		$found = self::probe_encoding( 'br' );
+		if ( null === $found ) {
+			return null;
+		}
+		$on = 'br' === $found;
+		if ( $on && self::server_brotli() ) {
+			$browser = self::probe_encoding( 'gzip, deflate, br' );
+			$on      = null === $browser || 'br' === $browser;
+		}
+		$changed = self::brotli_status()['on'] !== $on;
+		update_option(
+			self::BROTLI_OPT,
+			array(
+				'on'   => $on,
+				'time' => time(),
+			),
+			false
+		);
+		if ( $changed ) {
+			self::sync();
+		}
+		return $on;
+	}
+
+	/**
+	 * Content-Encoding of the stored homepage for the given Accept-Encoding.
+	 *
+	 * @param string $accept Accept-Encoding header.
+	 * @return string|null Null when no stored page answered.
+	 */
+	private static function probe_encoding( $accept ) {
+		for ( $try = 0; $try < 2; $try++ ) {
+			$response = wp_remote_get(
+				home_url( '/' ),
+				array(
+					'timeout'    => 15,
+					'decompress' => false,
+					'sslverify'  => apply_filters( 'https_local_ssl_verify', false ),
+					'user-agent' => 'Mozilla/5.0 (compatible; SHD Performance compression check)',
+					'headers'    => array( 'Accept-Encoding' => $accept ),
+				)
+			);
+			if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+				return null;
+			}
+			// The first request may have stored the page (MISS); the second one gets it from the cache.
+			if ( false !== stripos( (string) wp_remote_retrieve_header( $response, 'x-shd-cache' ), 'HIT' ) ) {
+				return strtolower( trim( (string) wp_remote_retrieve_header( $response, 'content-encoding' ) ) );
+			}
+		}
+		return null;
 	}
 
 	/**

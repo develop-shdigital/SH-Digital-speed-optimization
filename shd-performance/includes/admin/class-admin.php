@@ -215,7 +215,7 @@ final class Admin {
 	private function do_cache_save() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked in dispatch(); sanitized below.
 		$input = isset( $_POST['shd'] ) && is_array( $_POST['shd'] ) ? wp_unslash( $_POST['shd'] ) : array();
-		Settings::update( self::sanitize( array_intersect_key( $input, array_flip( array( 'page_cache', 'cache_ttl', 'cache_campaign', 'cache_exclude' ) ) ) ) );
+		Settings::update( self::sanitize( array_intersect_key( $input, array_flip( array( 'page_cache', 'cache_ttl', 'cache_campaign', 'cache_brotli', 'cache_exclude' ) ) ) ) );
 		$status = Page_Cache::sync();
 		$note   = 'active' === $status['state'] ? ' ' . self::purge_note( Cache::purge_all() ) : '';
 		$this->back( 'cache', 'success', __( 'Page cache settings saved.', 'shd-performance' ) . $note );
@@ -566,7 +566,7 @@ final class Admin {
 		if ( isset( $input['rum_sample'] ) ) {
 			$clean['rum_sample'] = max( 0, min( 100, (int) $input['rum_sample'] ) );
 		}
-		foreach ( array( 'page_cache', 'cache_campaign' ) as $key ) {
+		foreach ( array( 'page_cache', 'cache_campaign', 'cache_brotli' ) as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$clean[ $key ] = (bool) $input[ $key ];
 			}
@@ -1347,6 +1347,8 @@ final class Admin {
 		$this->number_row( 'cache_ttl', __( 'Keep pages for (hours)', 'shd-performance' ), $settings['cache_ttl'], 1, 12, __( 'Pages are rebuilt in the background before they expire. At most 12 hours: the pages contain security tokens for the forms and the newsletter sign-up, which WordPress accepts for 12 to 24 hours.', 'shd-performance' ) );
 		echo '<tr><th scope="row">' . esc_html__( 'Ad and campaign links', 'shd-performance' ) . '</th><td><input type="hidden" name="shd[cache_campaign]" value="0"><label><input type="checkbox" name="shd[cache_campaign]" value="1"' . checked( ! empty( $settings['cache_campaign'] ), true, false ) . '> ' . esc_html__( 'Send the cached page to addresses that only add marketing parameters (?gclid=…, ?utm_…, ?fbclid=…)', 'shd-performance' ) . '</label>';
 		echo '<p class="description">' . esc_html__( 'Visitors from Google Ads and campaigns then get the fast page too. Switch this on only after the checklist task “Load Google Analytics 4 from one place”: MonsterInsights writes the address of the request into the page on the server, so on a cached page it would not see the gclid. The tracking scripts in the browser still read the parameters from the address.', 'shd-performance' ) . '</p></td></tr>';
+		echo '<tr><th scope="row">' . esc_html__( 'Brotli', 'shd-performance' ) . '</th><td><input type="hidden" name="shd[cache_brotli]" value="0"><label><input type="checkbox" name="shd[cache_brotli]" value="1"' . checked( ! empty( $settings['cache_brotli'] ), true, false ) . '> ' . esc_html__( 'Use Brotli compression where the server has it', 'shd-performance' ) . '</label>';
+		echo '<p class="description">' . esc_html( self::brotli_note() ) . '</p></td></tr>';
 		$this->lines_row( 'cache_exclude', __( 'Never cache', 'shd-performance' ), $settings['cache_exclude'], __( 'One address path per line, for example /kontakt/ (also excludes the pages below it). * matches anything, for example /blog/*/print/.', 'shd-performance' ) );
 		echo '</tbody></table>';
 		echo '<p class="submit"><button type="submit" class="button button-primary">' . esc_html__( 'Save page cache settings', 'shd-performance' ) . '</button></p></form>';
@@ -1550,6 +1552,22 @@ final class Admin {
 		echo '<button type="submit" class="button">' . esc_html__( 'Upload and replace everywhere', 'shd-performance' ) . '</button></form>';
 		echo '</section>';
 		echo '</div>';
+	}
+
+	/**
+	 * @return string What the Brotli setting does, and what the last check found.
+	 */
+	private static function brotli_note() {
+		$note  = __( 'If Apache has its Brotli module, it is switched on in .htaccess for text files (HTML, CSS, JavaScript, SVG, JSON), for browsers that support it; without the module nothing changes. Stored pages use the server’s Brotli too, once a check has shown that the server really compresses them (checked daily; otherwise the stored gzip copies are sent).', 'shd-performance' );
+		$check = Page_Cache::brotli_status();
+		if ( $check['time'] > 0 ) {
+			$note .= ' ' . ( $check['on']
+				/* translators: %s: time ago */
+				? sprintf( __( 'Last check (%s): the server compresses stored pages with Brotli.', 'shd-performance' ), self::when( $check['time'] ) )
+				/* translators: %s: time ago */
+				: sprintf( __( 'Last check (%s): no Brotli from the server, stored pages are sent with gzip.', 'shd-performance' ), self::when( $check['time'] ) ) );
+		}
+		return $note;
 	}
 
 	/* ------------------------------------------------------------------

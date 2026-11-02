@@ -115,6 +115,23 @@ final class Checklist {
 				),
 			),
 			array(
+				'id'       => 'compression',
+				'group'    => __( 'Caching and server', 'shd-performance' ),
+				'title'    => __( 'Optional: Brotli compression and HTTP/3 at the host', 'shd-performance' ),
+				'optional' => true,
+				'why'      => __( 'Text files are compressed with gzip today. Brotli makes HTML, CSS and JavaScript about 15–20% smaller; HTTP/3 makes connections on mobile networks faster. Both are settings of the web server, and the PageSpeed score hardly changes, so this is a nice-to-have.', 'shd-performance' ),
+				'steps'    => array(
+					__( 'SHD Performance tries first: if Apache has its Brotli module, the page cache switches it on for text files (Page cache tab → “Brotli”, on by default). Run the health checks on the Tools tab; if files arrive with “br”, this task is done.', 'shd-performance' ),
+					__( '“Detected” shows which server answers visitors. On sh-digital.ch every answer comes from Apache (pages, files, redirects and error pages), so Apache does the compressing: ask your host to enable mod_brotli for text files (HTML, CSS, JavaScript, SVG and JSON).', 'shd-performance' ),
+					__( 'If your host has nginx in front of Apache: Brotli has to be switched on in nginx (the ngx_brotli module, “brotli on;” for the same text types), and nginx has to do the compressing. As long as Apache sends gzip, nginx passes it on unchanged.', 'shd-performance' ),
+					__( 'HTTP/3: Apache cannot do it. It needs nginx 1.25 or newer with QUIC (and UDP port 443 open), LiteSpeed, or a CDN such as Cloudflare in front (see the optional CDN task).', 'shd-performance' ),
+					__( 'When the host has done it, run the health checks again. Stored pages then use the server’s Brotli as well: SHD Performance checks this every day and goes back to its gzip copies by itself if Brotli is switched off again.', 'shd-performance' ),
+				),
+				'links'    => array( __( 'Health checks', 'shd-performance' ) => admin_url( 'admin.php?page=shd-performance&tab=tools#health' ) ),
+				'auto'     => array( __CLASS__, 'auto_health' ),
+				'check'    => 'compression',
+			),
+			array(
 				'id'    => 'fonts-woff2',
 				'group' => __( 'Fonts and icons', 'shd-performance' ),
 				'title' => __( 'Upload WOFF2 versions of Fractul Office', 'shd-performance' ),
@@ -317,17 +334,6 @@ final class Checklist {
 				'links' => array( __( 'Yoast file editor', 'shd-performance' ) => admin_url( 'admin.php?page=wpseo_tools&tool=file-editor' ) ),
 				'auto'  => array( __CLASS__, 'auto_health' ),
 				'check' => 'robots',
-			),
-			array(
-				'id'    => 'compression',
-				'group' => __( 'Domain and SEO hygiene', 'shd-performance' ),
-				'title' => __( 'Enable Brotli compression (and HTTP/3) at the host', 'shd-performance' ),
-				'why'   => __( 'The server uses gzip. Brotli makes text files about 15–20% smaller; HTTP/3 speeds up connections on mobile networks.', 'shd-performance' ),
-				'steps' => array(
-					__( 'Ask your host to enable mod_brotli (Apache) and HTTP/3, or use a CDN that provides both.', 'shd-performance' ),
-				),
-				'auto'  => array( __CLASS__, 'auto_health' ),
-				'check' => 'compression',
 			),
 			array(
 				'id'    => 'verify-lab',

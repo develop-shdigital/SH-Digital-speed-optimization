@@ -242,6 +242,7 @@ final class Plugin {
 	public function daily() {
 		Rum::prune();
 		Media_Replace::clean_previews();
+		Page_Cache::check_brotli();
 		$uploads = wp_get_upload_dir();
 		foreach ( (array) glob( trailingslashit( $uploads['basedir'] ) . Css_Rewriter::CACHE_SUBDIR . '/*.css' ) as $file ) {
 			if ( is_string( $file ) && filemtime( $file ) < time() - 30 * DAY_IN_SECONDS ) {

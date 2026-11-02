@@ -62,7 +62,7 @@ final class Page_Cache_Handler {
 	 * @param array $config Cache settings.
 	 * @param array $server $_SERVER.
 	 * @param array $cookie $_COOKIE.
-	 * @return array{file:string,store:bool,preload:bool,gzip:bool,head:bool}|null
+	 * @return array{file:string,store:bool,preload:bool,gzip:bool,br:bool,head:bool}|null
 	 */
 	public static function request( array $config, array $server, array $cookie ) {
 		if ( 'cli' === PHP_SAPI || defined( 'WP_ADMIN' ) || defined( 'DOING_AJAX' ) || defined( 'DOING_CRON' ) || defined( 'XMLRPC_REQUEST' ) || defined( 'WP_INSTALLING' ) || defined( 'IFRAME_REQUEST' ) ) {
@@ -115,6 +115,7 @@ final class Page_Cache_Handler {
 			'store'   => $store,
 			'preload' => isset( $server['HTTP_X_SHD_PRELOAD'] ),
 			'gzip'    => isset( $server['HTTP_ACCEPT_ENCODING'] ) && false !== stripos( (string) $server['HTTP_ACCEPT_ENCODING'], 'gzip' ),
+			'br'      => isset( $server['HTTP_ACCEPT_ENCODING'] ) && (bool) preg_match( '/(?:^|,)\s*br\s*(?:;|,|$)/i', (string) $server['HTTP_ACCEPT_ENCODING'] ),
 			'head'    => 'HEAD' === $method,
 		);
 	}
@@ -169,7 +170,8 @@ final class Page_Cache_Handler {
 		if ( ! $mtime || $mtime + (int) self::$config['ttl'] < time() ) {
 			return;
 		}
-		$gzip = $request['gzip'] && ! ini_get( 'zlib.output_compression' ) && is_file( $html . '.gz' );
+		// When the server compresses with Brotli, browsers that accept it get the plain copy to compress.
+		$gzip = $request['gzip'] && ! ( $request['br'] && ! empty( self::$config['server_br'] ) ) && ! ini_get( 'zlib.output_compression' ) && is_file( $html . '.gz' );
 		$file = $gzip ? $html . '.gz' : $html;
 		$size = @filesize( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		if ( ! $size ) {

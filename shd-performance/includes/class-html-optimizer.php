@@ -997,6 +997,10 @@ final class Html_Optimizer {
 	private function on_script( $p ) {
 		$type = strtolower( trim( (string) $p->get_attribute( 'type' ) ) );
 		$id   = (string) $p->get_attribute( 'id' );
+		// The SHD Consent banner must run at once, never delayed or deferred.
+		if ( 0 === strpos( $id, 'shd-consent' ) ) {
+			return;
+		}
 		$src  = $p->get_attribute( 'src' );
 		$src  = is_string( $src ) ? trim( $src ) : '';
 		$code = ( '' === $src && $this->can_modify_text ) ? $p->get_modifiable_text() : '';

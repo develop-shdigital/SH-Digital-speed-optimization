@@ -281,13 +281,16 @@ final class Checklist {
 			array(
 				'id'    => 'cookie-banner',
 				'group' => __( 'Tracking and consent', 'shd-performance' ),
-				'title' => __( 'CookieFirst banner: contrast and size on phones', 'shd-performance' ),
-				'why'   => __( 'The privacy link in the banner has a contrast of 1.76:1 (4.5:1 is required) and the banner covers about two thirds of a phone screen.', 'shd-performance' ),
+				'title' => __( 'Cookie banner: contrast and size on phones (own banner: SHD Consent)', 'shd-performance' ),
+				'why'   => __( 'The privacy link in the CookieFirst banner has a contrast of 1.76:1 (4.5:1 is required), the banner covers about two thirds of a phone screen, and it is loaded from CookieFirst’s servers in several steps, so on first visits it is often the slowest element on phones.', 'shd-performance' ),
 				'steps' => array(
-					__( 'In the CookieFirst dashboard, choose a darker link colour on the light-green background (for example the site’s dark blue #001E5A).', 'shd-performance' ),
-					__( 'Shorten the banner text on mobile or choose a compact layout.', 'shd-performance' ),
+					__( 'Recommended: SHD Consent, your own banner (no outside service, no page-view limits). Install and activate it; while CookieFirst is active it waits. Check the texts, colours and the list of services under SHD Consent, and look at it with “Preview on the site”.', 'shd-performance' ),
+					__( 'Deactivate CookieFirst: SHD Consent takes over at once. SHD Tracking Manager and SHD Analytics keep working (the choice is stored in the same cookie), and choices visitors made in CookieFirst are taken over.', 'shd-performance' ),
+					__( 'Add “Cookie-Einstellungen” to the footer so visitors can change their choice: a custom menu link to #cookie-einstellungen, or the shortcode [shd_cookie_settings]. Or keep the small round button.', 'shd-performance' ),
+					__( 'If you keep CookieFirst instead: choose a darker link colour (for example #001E5A) and a compact layout in its dashboard.', 'shd-performance' ),
 				),
 				'links' => array( 'CookieFirst' => 'https://app.cookiefirst.com/' ),
+				'auto'  => array( __CLASS__, 'auto_cookie_banner' ),
 			),
 			array(
 				'id'       => 'recaptcha',
@@ -483,6 +486,32 @@ final class Checklist {
 		return array(
 			'status' => 'good' === $result['status'] ? 'done' : ( 'info' === $result['status'] ? 'unknown' : 'open' ),
 			'note'   => $result['value'],
+		);
+	}
+
+	/**
+	 * Done when SHD Consent shows the banner.
+	 *
+	 * @return array
+	 */
+	public static function auto_cookie_banner() {
+		if ( ! class_exists( '\SHD\Consent\Settings' ) ) {
+			return array(
+				'status' => 'open',
+				'note'   => __( 'CookieFirst (SHD Consent is not installed)', 'shd-performance' ),
+			);
+		}
+		if ( \SHD\Consent\Settings::active() ) {
+			return array(
+				'status' => 'done',
+				'note'   => __( 'SHD Consent shows the banner.', 'shd-performance' ),
+			);
+		}
+		$other = \SHD\Consent\Settings::other_banner();
+		return array(
+			'status' => 'open',
+			/* translators: %s: plugin name */
+			'note'   => '' !== $other ? sprintf( __( 'SHD Consent is installed and waits until %s is deactivated.', 'shd-performance' ), $other ) : __( 'SHD Consent is switched off.', 'shd-performance' ),
 		);
 	}
 

@@ -5,7 +5,8 @@ Tools for making https://www.sh-digital.ch fast: a 95+ PageSpeed score on mobile
 | Folder | What it is |
 | --- | --- |
 | `shd-performance/` | The WordPress plugin. Install it on the site. |
-| `tools/build.sh` | Minifies the plugin's front-end scripts and builds `dist/shd-performance-<version>.zip`. |
+| `shd-consent/` | SHD Consent, the own cookie consent banner that replaces CookieFirst. |
+| `tools/build.sh` | Minifies the plugins' front-end scripts and builds `dist/shd-performance-<version>.zip` and `dist/shd-consent-<version>.zip`. |
 | `tests/optimize-fixtures.php` | Runs the optimizer over saved pages and checks that nothing visible was lost. |
 | `.claude/skills/web-perf/` | The Chrome DevTools performance skill used for the diagnosis. |
 
@@ -108,6 +109,19 @@ Every feature can be set to **Off**, **Test** or **Live**:
 - To compare against the original, open any page with `?shd-off=1` as an administrator.
 - To undo everything, deactivate the plugin.
 - If the admin is not reachable, add `define( 'SHD_PERFORMANCE_DISABLE', true );` to `wp-config.php`. Stored pages stop with the first page WordPress builds after that; to stop them at once, delete `wp-content/cache/shd-performance/pages` by FTP.
+
+## SHD Consent (cookie banner)
+
+An own consent banner instead of CookieFirst: no outside service, no page-view or domain limits, nothing loaded from another server.
+
+- **Fast:** the banner is part of the page (about 10 KB of inline CSS and JavaScript) and is painted with the first frame. A small script in `<head>` reads the stored choice first, so returning visitors never see it flash. On phones it covers about a quarter of the screen (CookieFirst: about two thirds).
+- **Fair choice:** “Alle akzeptieren” and “Nur notwendige” look the same; “Einstellungen” offers Funktional, Statistik and Marketing with their services. Text, links and buttons have a contrast of about 16:1 (at least 4.5:1 is checked when colours are changed). It works with the keyboard and passes axe-core without findings.
+- **Google Consent Mode v2:** everything is denied until the visitor chooses; the choice updates analytics_storage, ad_storage, ad_user_data and ad_personalization.
+- **Scripts wait for consent:** tracking scripts in the page (Google Analytics including MonsterInsights, Hotjar, Clarity, Google Ads, Meta, LinkedIn, TikTok, Bing, Pinterest, Leadinfo, OpenAI, plus own rules) are held back as `type="text/plain"` and run in their original order once their category is allowed.
+- **Works with the existing tracking:** the choice is also stored as `cookiefirst-consent` with the `cf_consent` events, so SHD Tracking Manager and SHD Analytics work unchanged, and choices visitors made in CookieFirst are taken over (until “Ask every visitor again”).
+- **Withdrawal:** the round button at the bottom left, the shortcode `[shd_cookie_settings]` or any link to `#cookie-einstellungen` opens the settings; withdrawing a category deletes its cookies (`_ga`, `_gcl_au`, …) and reloads the page.
+- **Consent log:** time, random consent ID (also in the visitor's cookie), categories, banner version and page; no IP address or browser details. Search by consent ID, CSV export, deleted after 24 months (adjustable).
+- **Switching:** while CookieFirst (or another banner plugin) is active, SHD Consent waits; administrators see it with `?shd-consent-preview=1`. Deactivating CookieFirst switches over at once.
 
 ## Results
 

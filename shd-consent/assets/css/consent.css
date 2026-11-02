@@ -1,0 +1,205 @@
+/* SHD Consent banner. Printed inline in <head>; colours come from the settings (--shdc-*). */
+#shd-consent {
+	display: none;
+	position: fixed;
+	z-index: 2147483000;
+	left: 10px;
+	right: 10px;
+	bottom: 10px;
+	max-height: calc(100vh - 20px);
+	max-height: calc(100dvh - 20px);
+	overflow: auto;
+	overscroll-behavior: contain;
+	background: var(--shdc-bg);
+	color: var(--shdc-text);
+	border-radius: 12px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, .22);
+	font-family: inherit;
+	font-size: 15px;
+	line-height: 1.5;
+	text-align: left;
+}
+.shd-js:not(.shd-consent-done) #shd-consent,
+#shd-consent.is-open {
+	display: block;
+}
+#shd-consent * {
+	box-sizing: border-box;
+}
+#shd-consent .shd-consent__inner {
+	padding: 16px 18px 12px;
+}
+#shd-consent .shd-consent__title {
+	margin: 0 0 6px;
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--shdc-text);
+}
+#shd-consent .shd-consent__text {
+	margin: 0 0 12px;
+	font-size: 14px;
+	color: var(--shdc-text);
+}
+#shd-consent a {
+	color: var(--shdc-link);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+#shd-consent .shd-consent__buttons {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+#shd-consent button {
+	margin: 0;
+	min-height: 44px;
+	padding: 10px 12px;
+	border: 2px solid var(--shdc-button);
+	border-radius: 8px;
+	background: var(--shdc-button);
+	color: var(--shdc-button-text);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.2;
+	letter-spacing: normal;
+	text-transform: none;
+	box-shadow: none;
+	cursor: pointer;
+}
+#shd-consent button:hover {
+	filter: brightness(1.15);
+}
+#shd-consent button:focus-visible,
+#shd-consent a:focus-visible,
+#shd-consent input:focus-visible,
+#shd-consent summary:focus-visible {
+	outline: 3px solid var(--shdc-link);
+	outline-offset: 2px;
+}
+#shd-consent .shd-consent__save {
+	grid-column: 1 / -1;
+}
+#shd-consent .shd-consent__footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 14px;
+	margin: 8px 0 0;
+	font-size: 13px;
+}
+#shd-consent .shd-consent__more {
+	min-height: 32px;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: var(--shdc-link);
+	font-size: 13px;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+#shd-consent .shd-consent__details {
+	margin: 0 0 12px;
+	border-top: 1px solid rgba(127, 127, 127, .3);
+}
+#shd-consent .shd-consent__cat {
+	padding: 10px 0;
+	border-bottom: 1px solid rgba(127, 127, 127, .3);
+}
+#shd-consent .shd-consent__cat label {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 14px;
+	font-weight: 700;
+	cursor: pointer;
+}
+#shd-consent .shd-consent__cat input {
+	flex: none;
+	width: 20px;
+	height: 20px;
+	margin: 0;
+	accent-color: var(--shdc-button);
+}
+#shd-consent .shd-consent__always {
+	margin-left: auto;
+	font-size: 12px;
+	font-weight: 400;
+}
+#shd-consent .shd-consent__cat p,
+#shd-consent details {
+	margin: 4px 0 0 30px;
+	font-size: 13px;
+}
+#shd-consent summary {
+	color: var(--shdc-link);
+	text-decoration: underline;
+	cursor: pointer;
+}
+#shd-consent ul {
+	margin: 6px 0 0;
+	padding: 0 0 0 18px;
+}
+#shd-consent li {
+	margin: 0 0 4px;
+}
+#shd-consent [hidden] {
+	display: none !important;
+}
+/* An id, so theme rules for buttons (for example [type=button]) cannot show or resize it. */
+#shd-consent-reopen {
+	display: none;
+	position: fixed;
+	z-index: 2147482999;
+	left: 12px;
+	bottom: 12px;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--shdc-button);
+	color: var(--shdc-button-text);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+.shd-consent-done #shd-consent-reopen {
+	display: flex;
+}
+.shd-consent-done #shd-consent.is-open ~ #shd-consent-reopen {
+	display: none;
+}
+#shd-consent-reopen svg {
+	width: 22px;
+	height: 22px;
+}
+@media (min-width: 768px) {
+	#shd-consent.shd-consent--box {
+		left: 24px;
+		right: auto;
+		bottom: 24px;
+		width: 440px;
+	}
+	#shd-consent.shd-consent--bar {
+		left: 0;
+		right: 0;
+		bottom: 0;
+		border-radius: 0;
+	}
+	#shd-consent.shd-consent--bar .shd-consent__inner {
+		max-width: 1140px;
+		margin: 0 auto;
+	}
+	#shd-consent.shd-consent--bar .shd-consent__buttons {
+		grid-template-columns: repeat(3, max-content);
+	}
+}
+@media print {
+	#shd-consent,
+	#shd-consent-reopen {
+		display: none !important;
+	}
+}

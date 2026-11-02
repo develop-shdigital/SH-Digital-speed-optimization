@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.1
+Stable tag: 1.4.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,9 @@ SHD Performance → Images (or "Replace file" in the Media Library). Choose "Use
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.4.2 =
+* Works with SHD Consent (the own cookie banner): its scripts are never delayed or deferred, and the checklist task about the cookie banner recommends it and turns green once it shows the banner.
 
 = 1.4.1 =
 * Text compression check: tests a static file instead of the homepage (which comes from the page cache's own gzip copies, so it always showed gzip), and shows the server software and whether HTTP/3 is offered.

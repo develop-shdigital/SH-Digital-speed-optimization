@@ -19,9 +19,12 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | Problem found on sh-digital.ch | What the plugin does | Default |
 | --- | --- | --- |
 | Entrance animations hide content and the header until Elementor's JavaScript runs: 2.0 s on desktop and 7.6 s on phones. | Content is shown immediately. | Live |
-| The header logo has `fetchpriority="high"`, while the real main image is lazy-loaded. | Picks the largest first-screen image (or the featured image) and prioritizes that instead. | Live |
+| The header logo has `fetchpriority="high"`, while the real main image is lazy-loaded. | Picks the largest first-screen image (or the featured image) and prioritizes that instead, separately for phones and computers. An image shown only on computers is not downloaded on phones. | Live |
+| The largest element of most pages is a section background image that the browser finds only after downloading the stylesheet naming it: it started about 2 s late on phones. | The background images of the first sections are preloaded with high priority, read from Elementor's CSS for phones and computers (blog cards and video covers included). Unused image preloads are removed. | Live |
+| Every page links 22–33 separate stylesheets; nothing appears until the last one has arrived (up to 1.5 s after the HTML). | Joined in the same order into one cached file per page. Same rules, same cascade: screenshots of 10 pages are pixel-identical. | Live |
 | Small images download large files, e.g. 34 px avatars load 768 px files. | `sizes="auto"` on lazy images. The browser picks the right srcset file, with no recompression. | Live |
-| YouTube widget loads about 1 MB of player code before anyone presses play. | Click-to-play preview. Playback starts with that click. | Live |
+| YouTube widget loads about 1 MB of player code before anyone presses play. | Click-to-play preview with the thumbnail as WebP copies on the site (4 widths). Playback starts with that click. | Live |
+| An embedded chart app on the industry case study loads with the page, with its own tag manager, TikTok pixel and reCAPTCHA (550 ms blocked main thread). | Other sites' iframes load when they come within half a screen. Carousels load only the slides in view with the page. | Live |
 | The autoplaying chart video in section 4 of /google-ads-agentur/ (735 KB) downloads with the page, far below the first screen. | Autoplaying videos below the first screen load when a visitor scrolls near them. The box keeps its size, so nothing moves. | Live |
 | reCAPTCHA v3 (349 KB) loads on every page. | Loaded when a visitor starts using a form. Submits wait for the token. | Live |
 | Tracking scripts compete with page load. | Start on the first interaction (or after 10 s). Consent handling is unchanged. | Live |

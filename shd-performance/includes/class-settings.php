@@ -42,7 +42,7 @@ final class Settings {
 				'default' => 'live',
 				'risk'    => 'low',
 				'title'   => __( 'Prioritize the main image', 'shd-performance' ),
-				'fixes'   => __( 'Picks the largest image in the first screen (or the post’s featured image), removes lazy-loading from it and gives it fetchpriority="high". Takes the high priority away from the header logo, which currently competes with it.', 'shd-performance' ),
+				'fixes'   => __( 'Picks the largest image in the first screen (or the post’s featured image), removes lazy-loading from it and gives it fetchpriority="high". Takes the high priority away from the header logo, which currently competes with it. Background images of the first sections (the main image of most pages here) are preloaded from the top of the page: the browser otherwise finds them only after it has downloaded the stylesheet that names them, 2 s late on phones. Phones and desktops are handled separately: a section shown only on phones gets its image preloaded for phones, and an image hidden on phones is never downloaded there. A YouTube video at the top counts too: its thumbnail gets the priority.', 'shd-performance' ),
 			),
 			'image_sizes'         => array(
 				'group'   => 'content',
@@ -70,7 +70,7 @@ final class Settings {
 				'default' => 'live',
 				'risk'    => 'low',
 				'title'   => __( 'Lazy-load iframes below the first screen', 'shd-performance' ),
-				'fixes'   => __( 'Embeds such as maps load when they come near the viewport instead of during page load.', 'shd-performance' ),
+				'fixes'   => __( 'Embeds such as maps load when they come near the viewport instead of during page load. Iframes from other sites (an embedded app, a map, a form) start loading only when they are half a screen away, or as soon as the page is laid out if they are already on screen: the browser’s own lazy-loading starts them several screens ahead, so the chart app on the industry case study still loaded, with its own Google Tag Manager, TikTok pixel and reCAPTCHA, while the page was loading (550 ms of blocked main thread on phones). The iframe keeps its size, so nothing moves.', 'shd-performance' ),
 			),
 			'lazy_videos'         => array(
 				'group'   => 'content',
@@ -127,6 +127,13 @@ final class Settings {
 				'risk'    => 'medium',
 				'title'   => __( 'Start all non-essential JavaScript on the first interaction', 'shd-performance' ),
 				'fixes'   => __( 'Biggest win for the mobile score (Total Blocking Time is 30% of it): Elementor, jQuery and plugin scripts start on the first scroll, tap, click or key press, or after the timeout, in their original order (Elementor Pro and the add-ons start together with Elementor, as on a normal page load). Taps on menus, buttons and forms made before that are replayed once the scripts are ready. The site’s own script files are pre-downloaded a few seconds after loading, so a later first tap does not wait for the network. Carousels start moving and the chat or map appear after the first interaction. Check menus, forms, carousels and the video in the preview before switching to Live.', 'shd-performance' ),
+			),
+			'combine_css'         => array(
+				'group'   => 'css',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'Load the page’s stylesheets as one file', 'shd-performance' ),
+				'fixes'   => __( 'WordPress links every plugin’s and every Elementor widget’s stylesheet separately, and nothing appears until all of them have arrived: 22 to 33 files per page here, which the server answered in waves, the last one up to 1.5 s after the page itself (PageSpeed Insights, November 2026). They are joined, with the inline styles between them, in exactly the same order into one cached file, so the page looks the same. Stylesheets that could behave differently when joined stay separate (other sites, print styles, @import, Elementor’s Swiper, lightbox and dialog styles, which Elementor loads itself). Fonts without a font-display rule (the IcoFont icons of LA-Studio Kit) get font-display: swap.', 'shd-performance' ),
 			),
 			'fonts'               => array(
 				'group'   => 'fonts',

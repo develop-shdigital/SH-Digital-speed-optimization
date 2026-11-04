@@ -23,6 +23,14 @@ final class Html_Optimizer {
 	/** Attribute that marks tags to delete in finalize(). */
 	const REMOVE_MARK = 'data-shd-x';
 
+	/**
+	 * Characters of main-content text after which an element no longer counts as first
+	 * screen, even when the page is one large section (the hero texts here have 70 to 290
+	 * characters before their image; the portrait on the case study, 2.5 phone screens
+	 * down, has 955).
+	 */
+	const FIRST_SCREEN_TEXT = 700;
+
 	const CLASSIC_TYPES = array( '', 'text/javascript', 'application/javascript', 'text/ecmascript', 'application/ecmascript' );
 
 	/** Origins a third-party script contacts right after it loads (CookieFirst's banner asks edge.* for the visitor's region). */
@@ -64,10 +72,37 @@ final class Html_Optimizer {
 	private $main_seen      = false;
 	private $top_index      = 0;
 
-	// LCP image candidates: bookmark name => score.
+	// Per device ('m' phones, 'd' desktops): visible top-level sections so far, and the
+	// position of the current one among them (0 = hidden on that device).
+	private $top_seen       = array(
+		'm' => 0,
+		'd' => 0,
+	);
+	private $top_pos        = array(
+		'm' => 0,
+		'd' => 0,
+	);
+
+	// LCP image candidates: bookmark name => array( 'm' => score, 'd' => score, 'hidden' => array( device => bool ) ).
 	private $lcp            = array();
 	private $lcp_counter    = 0;
 	private $other_high     = false;
+
+	// Sections with a background image in the first screen (resolved in finalize()).
+	private $bg_candidates  = array();
+
+	/** @var string[] Preload tags for the main images, placed early in <head>. */
+	private $image_preloads = array();
+
+	// YouTube facades in the first screen: number => array( 'm' => score, 'd' => score ); winners get high priority.
+	private $facade_lcp     = array();
+	private $facade_high    = array();
+
+	// Iframes from other sites that load when they come near the screen.
+	private $lazy_frames    = 0;
+
+	// Characters of main-content text seen so far.
+	private $text_now       = 0;
 
 	// Scripts.
 	private $any_delayed    = false;
@@ -145,7 +180,18 @@ final class Html_Optimizer {
 		}
 
 		$p = new \WP_HTML_Tag_Processor( $html );
-		while ( $p->next_tag( array( 'tag_closers' => 'visit' ) ) ) {
+		while ( $p->next_token() ) {
+			$type = $p->get_token_type();
+			if ( '#text' === $type ) {
+				// How far down the main content we are, for pages that are one large section.
+				if ( $this->main_seen && $this->inside( 'main' ) ) {
+					$this->text_now += strlen( trim( $p->get_modifiable_text() ) );
+				}
+				continue;
+			}
+			if ( '#tag' !== $type ) {
+				continue;
+			}
 			$tag = $p->get_tag();
 			if ( $p->is_tag_closer() ) {
 				$this->close( $tag );
@@ -272,8 +318,25 @@ final class Html_Optimizer {
 	 * @param string                 $tag Tag.
 	 */
 	private function push( $p, $tag ) {
-		$role = '';
-		$type = $p->get_attribute( 'data-elementor-type' );
+		$role   = '';
+		$type   = $p->get_attribute( 'data-elementor-type' );
+		$parent = empty( $this->stack ) ? null : $this->stack[ count( $this->stack ) - 1 ];
+
+		// Hidden on phones / on desktops by Elementor's responsive visibility (itself or an ancestor).
+		$hidden = array();
+		foreach ( self::hide_classes() as $device => $classes ) {
+			$hidden[ $device ] = null !== $parent && $parent[3][ $device ];
+			foreach ( $classes as $class ) {
+				if ( ! $hidden[ $device ] && $p->has_class( $class ) ) {
+					$hidden[ $device ] = true;
+				}
+			}
+		}
+		// Post of the loop grid card this element belongs to (its background may be that post's image).
+		$loop = null !== $parent ? $parent[4] : 0;
+		if ( 'loop-item' === $type && preg_match( '/\be-loop-item-(\d+)\b/', (string) $p->get_attribute( 'class' ), $post ) ) {
+			$loop = (int) $post[1];
+		}
 
 		if ( is_string( $type ) && '' !== $type ) {
 			if ( 'header' === $type ) {
@@ -293,6 +356,10 @@ final class Html_Optimizer {
 		} elseif ( ( $p->has_class( 'e-parent' ) || $p->has_class( 'elementor-top-section' ) ) && 'main' === $this->nearest_document() ) {
 			$role = 'top';
 			++$this->top_index;
+			// A section shown only on phones (or only on desktops) is the first screen there.
+			foreach ( array_keys( $this->top_pos ) as $device ) {
+				$this->top_pos[ $device ] = $hidden[ $device ] ? 0 : ++$this->top_seen[ $device ];
+			}
 		} elseif ( 'FIGURE' === $tag && $p->has_class( 'wp-has-aspect-ratio' ) ) {
 			$role = 'aspect';
 		} elseif ( 'DIV' === $tag && $p->has_class( 'wp-block-embed__wrapper' ) ) {
@@ -317,7 +384,94 @@ final class Html_Optimizer {
 			}
 		}
 
-		$this->stack[] = array( $tag, $role, $lazy );
+		// Already marked (a page optimized before): its backgrounds wait as well.
+		$lazy          = $lazy || null !== $p->get_attribute( 'data-shd-lazy-bg' );
+		$this->stack[] = array( $tag, $role, $lazy, $hidden, $loop );
+
+		if ( ! empty( $this->on['lcp_image'] ) ) {
+			$this->background_candidate( $p );
+		}
+	}
+
+	/**
+	 * Elementor's classes that hide an element on phones ('m') and on desktops ('d').
+	 * Lighthouse tests desktops 1350 px wide: with Elementor's "laptop" breakpoint
+	 * active, that width is a laptop.
+	 *
+	 * @return array<string,string[]>
+	 */
+	private static function hide_classes() {
+		static $classes = null;
+		if ( null !== $classes ) {
+			return $classes;
+		}
+		$classes = array(
+			'm' => array( 'elementor-hidden-mobile' ),
+			'd' => array( 'elementor-hidden-desktop' ),
+		);
+		if ( class_exists( '\Elementor\Plugin' ) && isset( \Elementor\Plugin::$instance->breakpoints ) && method_exists( \Elementor\Plugin::$instance->breakpoints, 'get_active_breakpoints' ) ) {
+			try {
+				$active = (array) \Elementor\Plugin::$instance->breakpoints->get_active_breakpoints();
+				if ( isset( $active['laptop'] ) && is_object( $active['laptop'] ) && 1350 <= (int) $active['laptop']->get_value() ) {
+					$classes['d'] = array( 'elementor-hidden-laptop' );
+				} elseif ( isset( $active['widescreen'] ) && is_object( $active['widescreen'] ) && 1350 >= (int) $active['widescreen']->get_value() ) {
+					$classes['d'] = array( 'elementor-hidden-widescreen' );
+				}
+			} catch ( \Throwable $e ) {
+				// Keep the defaults.
+			}
+		}
+		return $classes;
+	}
+
+	/**
+	 * @param string $device 'm' or 'd'.
+	 * @return bool Whether the current element is hidden on that device.
+	 */
+	private function hidden( $device ) {
+		return ! empty( $this->stack ) && ! empty( $this->stack[ count( $this->stack ) - 1 ][3][ $device ] );
+	}
+
+	/**
+	 * Remember a section with a background image in the first screen; its image is found
+	 * in the CSS and preloaded in finalize().
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function background_candidate( $p ) {
+		if ( count( $this->bg_candidates ) >= 8 || $this->header_depth > 0 || $this->text_now > self::FIRST_SCREEN_TEXT || ! $this->inside( 'main' ) || $this->inside_lazy_bg() ) {
+			return;
+		}
+		$devices = array();
+		foreach ( array_keys( $this->top_pos ) as $device ) {
+			if ( $this->in_first_screen_on( $device ) ) {
+				$devices[ $device ] = true;
+			}
+		}
+		if ( empty( $devices ) ) {
+			return;
+		}
+		$url   = null;
+		$style = $p->get_attribute( 'style' );
+		if ( is_string( $style ) && preg_match( '/background(?:-image)?\s*:[^;]*url\(\s*([\'"]?)([^\'")]+)\1\s*\)/i', html_entity_decode( $style, ENT_QUOTES ), $m ) ) {
+			// Inline image, e.g. the image overlay of Elementor's video widget.
+			$url = trim( $m[2] );
+			if ( 0 === stripos( $url, 'data:' ) ) {
+				return;
+			}
+		} else {
+			$settings = $p->get_attribute( 'data-settings' );
+			$id       = $p->get_attribute( 'data-id' );
+			if ( ! is_string( $settings ) || ! is_string( $id ) || '' === $id || ! preg_match( '/"background_background"\s*:\s*"classic"/', $settings ) ) {
+				return;
+			}
+		}
+		$this->bg_candidates[] = array(
+			'id'      => (string) $p->get_attribute( 'data-id' ),
+			'loop'    => (int) $this->stack[ count( $this->stack ) - 1 ][4],
+			'url'     => $url,
+			'devices' => $devices,
+		);
 	}
 
 	/**
@@ -338,7 +492,7 @@ final class Html_Optimizer {
 			return 'view';
 		}
 		if ( 'top' === $role ) {
-			return $this->top_index > (int) $this->s['first_screen_sections'] ? 'view' : '';
+			return $this->in_first_screen() ? '' : 'view';
 		}
 		// Loop grid cards (not carousel slides: a slide outside the carousel's window never "comes into view").
 		if ( 'loop-item' === $type && ! $p->has_class( 'swiper-slide' ) ) {
@@ -426,7 +580,41 @@ final class Html_Optimizer {
 			return false;
 		}
 		$limit = null === $sections ? max( 1, (int) $this->s['first_screen_sections'] ) : $sections;
-		return $this->top_index >= 1 && $this->top_index <= $limit && $this->inside( 'main' );
+		if ( $this->top_index < 1 || ! $this->inside( 'main' ) ) {
+			return false;
+		}
+		// Also a section that comes later in the page but is among the first ones shown on
+		// phones or on desktops (the others being hidden there).
+		if ( $this->top_index <= $limit ) {
+			return true;
+		}
+		foreach ( $this->top_pos as $position ) {
+			if ( $position >= 1 && $position <= $limit ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the current element is visible on a device and in its first screen.
+	 *
+	 * @param string   $device   'm' or 'd'.
+	 * @param int|null $sections Number of top-level sections that count (default: setting).
+	 * @return bool
+	 */
+	private function in_first_screen_on( $device, $sections = null ) {
+		if ( $this->hidden( $device ) ) {
+			return false;
+		}
+		if ( $this->header_depth > 0 ) {
+			return true;
+		}
+		if ( $this->in_footer || $this->inside( 'popup' ) || ! $this->inside( 'main' ) ) {
+			return false;
+		}
+		$limit = null === $sections ? max( 1, (int) $this->s['first_screen_sections'] ) : $sections;
+		return $this->top_pos[ $device ] >= 1 && $this->top_pos[ $device ] <= $limit;
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -505,7 +693,8 @@ final class Html_Optimizer {
 			$video = $this->pending_video;
 			$p->set_attribute( 'data-shd-yt-slot', (string) $video['n'] );
 			$p->add_class( 'shd-yt-slot' );
-			$this->facades[ $video['n'] ] = Youtube::facade_html( $video['id'], $video['settings'], $video['first'], (string) $this->s['youtube_label'] );
+			// Built in insert_facades(), once it is known whether its thumbnail is the main image.
+			$this->facades[ $video['n'] ] = $video;
 			$this->pending_video          = null;
 		}
 	}
@@ -723,6 +912,17 @@ final class Html_Optimizer {
 			'settings' => $settings,
 			'first'    => $this->in_first_screen(),
 		);
+
+		// In the first screen its thumbnail (as wide as the widget, 16:9) can be the main image.
+		if ( ! empty( $this->on['lcp_image'] ) && $this->text_now <= self::FIRST_SCREEN_TEXT ) {
+			$scores = array();
+			foreach ( array_keys( $this->top_pos ) as $device ) {
+				$scores[ $device ] = $this->in_first_screen_on( $device ) ? 1280 * 720 + ( 1 === $this->top_pos[ $device ] ? 1000000000 : 0 ) : 0;
+			}
+			if ( max( $scores ) > 0 ) {
+				$this->facade_lcp[ $n ] = $scores;
+			}
+		}
 	}
 
 	/**
@@ -747,13 +947,12 @@ final class Html_Optimizer {
 				// high priority; WordPress's choice gets it back if no main image is found.
 				if ( 'high' === $p->get_attribute( 'fetchpriority' ) ) {
 					$p->remove_attribute( 'fetchpriority' );
-					if ( ! $this->other_high && $p->set_bookmark( 'shd_high' ) ) {
+					// Only an image near the top of the page may get it back.
+					if ( ! $this->other_high && $this->text_now <= self::FIRST_SCREEN_TEXT && $this->in_first_screen() && $p->set_bookmark( 'shd_high' ) ) {
 						$this->other_high = true;
 					}
 				}
-				if ( $this->in_first_screen() ) {
-					$this->consider_lcp( $p );
-				}
+				$this->consider_lcp( $p );
 			}
 		}
 
@@ -786,58 +985,169 @@ final class Html_Optimizer {
 	 * @param \WP_HTML_Tag_Processor $p Processor.
 	 */
 	private function consider_lcp( $p ) {
-		$width  = (int) $p->get_attribute( 'width' );
-		$height = (int) $p->get_attribute( 'height' );
-		$score  = $width * $height;
-
-		if ( $this->inside( 'featured' ) ) {
-			$score += 4000000000;
-		} elseif ( $score < 150 * 150 ) {
+		$area     = (int) $p->get_attribute( 'width' ) * (int) $p->get_attribute( 'height' );
+		$featured = $this->inside( 'featured' );
+		if ( ! $featured && ( $area < 150 * 150 || $this->text_now > self::FIRST_SCREEN_TEXT ) ) {
 			return;
 		}
-		if ( 1 === $this->top_index ) {
-			$score += 1000000000;
-		}
 
-		if ( count( $this->lcp ) >= 4 ) {
-			asort( $this->lcp );
-			$lowest = key( $this->lcp );
-			if ( $this->lcp[ $lowest ] >= $score ) {
-				return;
+		$candidate = array( 'hidden' => array() );
+		$any       = false;
+		foreach ( array_keys( $this->top_pos ) as $device ) {
+			$candidate['hidden'][ $device ] = $this->hidden( $device );
+			$candidate[ $device ]           = 0;
+			if ( $this->in_first_screen_on( $device ) ) {
+				$candidate[ $device ] = $area + ( $featured ? 4000000000 : 0 ) + ( 1 === $this->top_pos[ $device ] ? 1000000000 : 0 );
+				$any                  = true;
 			}
-			$p->release_bookmark( $lowest );
-			unset( $this->lcp[ $lowest ] );
+		}
+		if ( ! $any ) {
+			return;
 		}
 
 		$name = 'shd_lcp_' . ( $this->lcp_counter++ );
-		if ( $p->set_bookmark( $name ) ) {
-			$this->lcp[ $name ] = $score;
+		if ( ! $p->set_bookmark( $name ) ) {
+			return;
+		}
+		$this->lcp[ $name ] = $candidate;
+
+		// A document allows only 10 bookmarks: keep the best three per device.
+		$keep = array();
+		foreach ( array_keys( $this->top_pos ) as $device ) {
+			$scores = array();
+			foreach ( $this->lcp as $key => $c ) {
+				if ( $c[ $device ] > 0 ) {
+					$scores[ $key ] = $c[ $device ];
+				}
+			}
+			arsort( $scores );
+			foreach ( array_slice( array_keys( $scores ), 0, 3 ) as $key ) {
+				$keep[ $key ] = true;
+			}
+		}
+		foreach ( array_keys( $this->lcp ) as $key ) {
+			if ( ! isset( $keep[ $key ] ) ) {
+				$p->release_bookmark( $key );
+				unset( $this->lcp[ $key ] );
+			}
 		}
 	}
 
 	/**
-	 * Give the winning image high priority and no lazy-loading.
+	 * The main image per device gets high priority and no lazy-loading. When phones and
+	 * desktops show different main images, each is preloaded for its own screen width
+	 * only; an image hidden on phones stays lazy there, so phones never download it.
 	 *
 	 * @param \WP_HTML_Tag_Processor $p Processor.
 	 */
 	private function apply_lcp( $p ) {
-		arsort( $this->lcp );
-		$winner = key( $this->lcp );
-		if ( null === $winner || ! $p->seek( $winner ) ) {
-			if ( $this->other_high && $p->seek( 'shd_high' ) ) {
+		$winners = array();
+		foreach ( array_keys( $this->top_pos ) as $device ) {
+			$best   = 0;
+			$winner = null;
+			foreach ( $this->lcp as $name => $c ) {
+				if ( $c[ $device ] > $best ) {
+					$best   = $c[ $device ];
+					$winner = $name;
+				}
+			}
+			foreach ( $this->facade_lcp as $n => $scores ) {
+				if ( $scores[ $device ] > $best ) {
+					$best   = $scores[ $device ];
+					$winner = 'facade:' . $n;
+				}
+			}
+			$winners[ $device ] = $winner;
+			if ( null !== $winner && 0 === strpos( $winner, 'facade:' ) ) {
+				$this->facade_high[ (int) substr( $winner, 7 ) ] = true;
+				$winners[ $device ]                              = null;
+			}
+		}
+
+		$images = array_values( array_unique( array_filter( $winners ) ) );
+		if ( empty( $images ) ) {
+			if ( empty( $this->facade_high ) && $this->other_high && $p->seek( 'shd_high' ) ) {
 				$p->set_attribute( 'fetchpriority', 'high' );
 			}
 			return;
 		}
-		$p->set_attribute( 'fetchpriority', 'high' );
-		if ( 'lazy' === $p->get_attribute( 'loading' ) ) {
-			$p->remove_attribute( 'loading' );
-			$sizes = $p->get_attribute( 'sizes' );
-			if ( is_string( $sizes ) && 0 === stripos( $sizes, 'auto, ' ) ) {
-				$p->set_attribute( 'sizes', substr( $sizes, 6 ) );
+
+		if ( 1 === count( $images ) && $winners['m'] === $winners['d'] ) {
+			if ( $p->seek( $images[0] ) ) {
+				$p->set_attribute( 'fetchpriority', 'high' );
+				$this->make_eager( $p );
+				$this->count( 'lcp_image' );
+			}
+			return;
+		}
+
+		$mobile_max = Toc::mobile_max_width();
+		foreach ( $winners as $device => $name ) {
+			if ( null === $name || ! $p->seek( $name ) ) {
+				continue;
+			}
+			$hidden_on_phones = 'd' === $device && ! empty( $this->lcp[ $name ]['hidden']['m'] );
+			if ( $hidden_on_phones ) {
+				// Lazy and hidden: phones never download it; desktops get it from the preload.
+				$p->set_attribute( 'loading', 'lazy' );
+				$this->strip_auto_sizes( $p );
+			} else {
+				$this->make_eager( $p );
+			}
+			$media = 'm' === $device ? '(max-width: ' . $mobile_max . 'px)' : '(min-width: ' . ( $mobile_max + 1 ) . 'px)';
+			$tag   = $this->image_preload_tag( $p, $media );
+			if ( '' !== $tag ) {
+				$this->image_preloads[] = $tag;
+				$this->count( 'lcp_image' );
 			}
 		}
-		$this->count( 'lcp_image' );
+	}
+
+	/**
+	 * @param \WP_HTML_Tag_Processor $p Processor at an image.
+	 */
+	private function make_eager( $p ) {
+		if ( 'lazy' === $p->get_attribute( 'loading' ) ) {
+			$p->remove_attribute( 'loading' );
+		}
+		$this->strip_auto_sizes( $p );
+	}
+
+	/**
+	 * sizes="auto" picks the file from the laid-out width, which a preload cannot know;
+	 * a preloaded image must pick the same file as its preload.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor at an image.
+	 */
+	private function strip_auto_sizes( $p ) {
+		$sizes = $p->get_attribute( 'sizes' );
+		if ( is_string( $sizes ) && 0 === stripos( $sizes, 'auto, ' ) ) {
+			$p->set_attribute( 'sizes', substr( $sizes, 6 ) );
+		}
+	}
+
+	/**
+	 * <link rel="preload"> for the image at the processor, for one screen width range.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p     Processor at an image.
+	 * @param string                 $media Media query.
+	 * @return string
+	 */
+	private function image_preload_tag( $p, $media ) {
+		$src = $p->get_attribute( 'src' );
+		if ( ! is_string( $src ) || '' === $src || 0 === stripos( $src, 'data:' ) ) {
+			return '';
+		}
+		$tag    = '<link rel="preload" as="image" href="' . esc_url( $src ) . '"';
+		$srcset = $p->get_attribute( 'srcset' );
+		$sizes  = $p->get_attribute( 'sizes' );
+		if ( is_string( $srcset ) && '' !== trim( $srcset ) ) {
+			$tag .= ' imagesrcset="' . esc_attr( $srcset ) . '"';
+			if ( is_string( $sizes ) && '' !== trim( $sizes ) ) {
+				$tag .= ' imagesizes="' . esc_attr( $sizes ) . '"';
+			}
+		}
+		return $tag . ' fetchpriority="high" media="' . esc_attr( $media ) . '">';
 	}
 
 	/**
@@ -892,13 +1202,41 @@ final class Html_Optimizer {
 				return;
 			}
 		}
-		if ( empty( $this->on['lazy_iframes'] ) || $this->in_first_screen() ) {
+		if ( empty( $this->on['lazy_iframes'] ) ) {
+			return;
+		}
+		// Another site's iframe (an embedded app, a map, a form) starts loading when it comes
+		// near the screen. The browser's loading="lazy" starts iframes several screens ahead:
+		// the case-study chart app further down the page still loaded, with its own analytics
+		// and reCAPTCHA, while the page was loading. Elementor pages are often one large
+		// section, so the position is left to the browser: an iframe already on screen
+		// starts as soon as the page is laid out. loading="eager" set by the author is kept.
+		$src = $p->get_attribute( 'src' );
+		if ( is_string( $src ) && self::other_site( $src ) && null === $p->get_attribute( 'srcdoc' ) && null === $p->get_attribute( 'data-src' ) && 0 === $this->header_depth && 'eager' !== strtolower( trim( (string) $p->get_attribute( 'loading' ) ) ) ) {
+			$p->set_attribute( 'data-shd-src', $src );
+			$p->remove_attribute( 'src' );
+			++$this->lazy_frames;
+			return;
+		}
+		if ( $this->in_first_screen() ) {
 			return;
 		}
 		if ( null === $p->get_attribute( 'loading' ) ) {
 			$p->set_attribute( 'loading', 'lazy' );
 			$this->count( 'lazy_iframes' );
 		}
+	}
+
+	/**
+	 * @param string $url URL.
+	 * @return bool Whether it is an http(s) URL on another host than this site.
+	 */
+	private static function other_site( $url ) {
+		$url = html_entity_decode( trim( $url ), ENT_QUOTES );
+		if ( ! preg_match( '#^(?:https?:)?//([^/:?\#]+)#i', $url, $m ) ) {
+			return false;
+		}
+		return strtolower( $m[1] ) !== strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 	}
 
 	/**
@@ -1276,11 +1614,127 @@ final class Html_Optimizer {
 		$html = preg_replace( '/<script\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>\s*<\/script>[ \t]*\n?/i', '', $html );
 		$html = preg_replace( '/<link\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>[ \t]*\n?/i', '', $html );
 
+		if ( ! empty( $this->on['lcp_image'] ) ) {
+			$html = $this->drop_unused_preloads( $html );
+		}
+		$this->background_preloads( $html );
 		$html = $this->insert_head( $html );
+		if ( ! empty( $this->on['combine_css'] ) ) {
+			list( $html, $joined ) = Css_Combiner::combine( $html );
+			if ( $joined > 0 ) {
+				$this->count( 'css_combined', $joined );
+			}
+		}
 		$html = $this->insert_body_start( $html );
 		$html = $this->insert_body_end( $html );
 
 		return $html;
+	}
+
+	/**
+	 * Remove image preloads for files the page does not show (not in its markup, scripts
+	 * or stylesheets). /kontakt/ preloaded a copy of its hero image under another name:
+	 * phones downloaded it first, with high priority, while the image actually shown waited.
+	 *
+	 * @param string $html Document.
+	 * @return string
+	 */
+	private function drop_unused_preloads( $html ) {
+		$end = stripos( $html, '</head>' );
+		if ( false === $end || ! preg_match_all( '#<link\b[^>]*>#i', substr( $html, 0, $end ), $m, PREG_OFFSET_CAPTURE ) ) {
+			return $html;
+		}
+		$css = false;
+		for ( $i = count( $m[0] ) - 1; $i >= 0; $i-- ) {
+			$tag    = $m[0][ $i ][0];
+			$offset = $m[0][ $i ][1];
+			$attrs  = Css_Combiner::attributes( $tag );
+			if ( ! isset( $attrs['rel'], $attrs['as'], $attrs['href'] ) || isset( $attrs['imagesrcset'] ) || 'preload' !== strtolower( trim( $attrs['rel'] ) ) || 'image' !== strtolower( trim( $attrs['as'] ) ) ) {
+				continue;
+			}
+			$file = wp_basename( (string) wp_parse_url( html_entity_decode( $attrs['href'], ENT_QUOTES ), PHP_URL_PATH ) );
+			if ( strlen( $file ) < 5 ) {
+				continue;
+			}
+			$rest = substr( $html, 0, $offset ) . substr( $html, $offset + strlen( $tag ) );
+			if ( false !== strpos( $rest, $file ) || false !== strpos( $rest, rawurlencode( $file ) ) ) {
+				continue;
+			}
+			if ( false === $css ) {
+				$css = Backgrounds::stylesheets( $rest );
+			}
+			if ( null === $css || false !== strpos( $css, $file ) ) {
+				continue;
+			}
+			$html = $rest;
+			$this->count( 'unused_preloads' );
+		}
+		return $html;
+	}
+
+	/**
+	 * Preload the background images of the first sections (at most two per device). The
+	 * browser otherwise finds them only after downloading and applying the stylesheet
+	 * that names them, which made them start 2 s late on most pages.
+	 *
+	 * @param string $html Document (with its stylesheets still in place).
+	 */
+	private function background_preloads( $html ) {
+		if ( empty( $this->bg_candidates ) ) {
+			return;
+		}
+		$ids = array();
+		foreach ( $this->bg_candidates as $candidate ) {
+			if ( null === $candidate['url'] && '' !== $candidate['id'] ) {
+				$ids[ $candidate['id'] ] = true;
+			}
+		}
+		$rules = empty( $ids ) ? array() : Backgrounds::collect( $html, array_keys( $ids ) );
+
+		// Lighthouse's phone (412 px) and desktop (1350 px).
+		$widths = array(
+			'm' => 412,
+			'd' => 1350,
+		);
+		$urls   = array(
+			'm' => array(),
+			'd' => array(),
+		);
+		foreach ( $this->bg_candidates as $candidate ) {
+			foreach ( $widths as $device => $width ) {
+				if ( empty( $candidate['devices'][ $device ] ) || count( $urls[ $device ] ) >= 2 ) {
+					continue;
+				}
+				$url = null !== $candidate['url'] ? $candidate['url'] : Backgrounds::url( $rules, $candidate['id'], $candidate['loop'], $width );
+				if ( null === $url || 'none' === $url || ! preg_match( '#^(?:https?:)?//|^/(?!/)#i', $url ) ) {
+					continue;
+				}
+				if ( ! in_array( $url, $urls[ $device ], true ) ) {
+					$urls[ $device ][] = $url;
+				}
+			}
+		}
+
+		$mobile_max = Toc::mobile_max_width();
+		$tags       = array();
+		foreach ( array_values( array_unique( array_merge( $urls['m'], $urls['d'] ) ) ) as $url ) {
+			$on_phones   = array_search( $url, $urls['m'], true );
+			$on_desktops = array_search( $url, $urls['d'], true );
+			$media       = '';
+			if ( false === $on_phones ) {
+				$media = '(min-width: ' . ( $mobile_max + 1 ) . 'px)';
+			} elseif ( false === $on_desktops ) {
+				$media = '(max-width: ' . $mobile_max . 'px)';
+			}
+			// Which of them is the largest element is not known here (a smooth gradient
+			// covering the whole first screen does not count for the browser): both are
+			// shown at once, so both get high priority.
+			$tags[] = '<link rel="preload" as="image" href="' . esc_url( $url ) . '" fetchpriority="high"' . ( '' !== $media ? ' media="' . esc_attr( $media ) . '"' : '' ) . '>';
+		}
+		if ( ! empty( $tags ) ) {
+			$this->count( 'background_preloads', count( $tags ) );
+			$this->image_preloads = array_merge( $tags, $this->image_preloads );
+		}
 	}
 
 	/**
@@ -1342,8 +1796,9 @@ final class Html_Optimizer {
 				if ( ! isset( $this->facades[ $n ] ) ) {
 					return $m[0];
 				}
+				$video        = $this->facades[ $n ];
 				$placed[ $n ] = true;
-				return $m[1] . $this->facades[ $n ] . $m[3];
+				return $m[1] . Youtube::facade_html( $video['id'], $video['settings'], $video['first'], (string) $this->s['youtube_label'], ! empty( $this->facade_high[ $n ] ) ) . $m[3];
 			},
 			$html
 		);
@@ -1377,6 +1832,9 @@ final class Html_Optimizer {
 
 		foreach ( array_keys( $this->preconnect ) as $host ) {
 			$tags .= '<link rel="preconnect" href="https://' . esc_attr( $host ) . '">' . "\n";
+		}
+		foreach ( $this->image_preloads as $tag ) {
+			$tags .= $tag . "\n";
 		}
 		foreach ( $this->consent_moved as $script ) {
 			$tags .= '<link rel="preload" as="script" href="' . esc_attr( $script[0] ) . '">' . "\n";
@@ -1456,6 +1914,10 @@ final class Html_Optimizer {
 		if ( $this->lazy_videos > 0 ) {
 			$this->count( 'lazy_videos', $this->lazy_videos );
 			$scripts .= '<script id="shd-perf-lazy-video">' . Assets::script( 'lazy-video' ) . "</script>\n";
+		}
+		if ( $this->lazy_frames > 0 ) {
+			$this->count( 'lazy_frames', $this->lazy_frames );
+			$scripts .= '<script id="shd-perf-lazy-iframe">' . Assets::script( 'lazy-iframe' ) . "</script>\n";
 		}
 		if ( ! empty( $this->on['rum'] ) ) {
 			$scripts .= Rum::loader_tag();

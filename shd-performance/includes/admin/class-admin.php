@@ -1109,6 +1109,7 @@ final class Admin {
 		$counts   = self::state_counts();
 		$groups   = array(
 			'content'     => __( 'Content and images', 'shd-performance' ),
+			'css'         => __( 'Stylesheets', 'shd-performance' ),
 			'third-party' => __( 'Third-party scripts', 'shd-performance' ),
 			'javascript'  => __( 'JavaScript', 'shd-performance' ),
 			'fonts'       => __( 'Fonts', 'shd-performance' ),

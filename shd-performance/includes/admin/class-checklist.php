@@ -160,6 +160,17 @@ final class Checklist {
 				'check' => 'font_icons',
 			),
 			array(
+				'id'    => 'icofont',
+				'group' => __( 'Fonts and icons', 'shd-performance' ),
+				'title' => __( 'Replace the six IcoFont icons (526 KB font for six icons)', 'shd-performance' ),
+				'why'   => __( 'One icon on /seo-spezialisten/ (“fast delivery”) and five check marks on /geo-agentur/ (“tick boxed”) come from IcoFont, LA-Studio Kit’s icon font. For them every phone downloads the whole font, 526 KB, with the highest priority, plus a 90 KB stylesheet: more than all other files of the page’s first screen together. Elementor’s own icons are drawn as small inline SVG (with “Inline Font Icons” active) and need no download.', 'shd-performance' ),
+				'steps' => array(
+					__( '/seo-spezialisten/: open the page in Elementor, click the icon with the delivery truck and choose a similar icon from “Font Awesome” in the icon library (for example “shipping-fast” or “truck”), or upload an SVG. Update.', 'shd-performance' ),
+					__( '/geo-agentur/: the five check marks of the list. Choose “check-square” or “check-circle” from Font Awesome instead. Update.', 'shd-performance' ),
+					__( 'Purge the page cache and open both pages: IcoFont is no longer loaded (LA-Studio Kit only adds it to pages that use one of its icons).', 'shd-performance' ),
+				),
+			),
+			array(
 				'id'    => 'qi-addons',
 				'group' => __( 'Add-ons and widgets', 'shd-performance' ),
 				'title' => __( 'Deactivate Qi Addons for Elementor', 'shd-performance' ),
@@ -204,7 +215,7 @@ final class Checklist {
 				'id'    => 'images',
 				'group' => __( 'Images', 'shd-performance' ),
 				'title' => __( 'Replace oversized image files (no visible quality loss)', 'shd-performance' ),
-				'why'   => __( 'The /resultate/ page alone loads about 3.5 MB more image data than needed (mockups of 450–740 KB each).', 'shd-performance' ),
+				'why'   => __( 'The /resultate/ page alone loads about 3.5 MB more image data than needed (mockups of 450–740 KB each). The main images of several pages are also heavier than they look: the video cover on /google-ads-agentur/ (google-ads-agentur-2.webp, 391 KB, the largest element on phones), the background of /firmenverzeichnis/ (webseiten-hintergrund.png, 204 KB), the background of the blog cards (sh-digital-blog.webp, 237 KB) and the 3D picture on /kontakt/ and /danke/ (a 110 KB PNG).', 'shd-performance' ),
 				'steps' => array(
 					__( 'Open the Images tab. It lists the largest files; open one with “Make lighter or replace”.', 'shd-performance' ),
 					__( '“Make lighter” shows a WebP version with the same width and height next to the original (quality 90; PNG photos usually become 80–90% smaller, JPEG files 20–40%). Compare both at full size, then press “Use the WebP version everywhere”. Every page, template, header, footer and setting that uses the image switches to the new file; Elementor’s CSS and the page cache are cleared automatically.', 'shd-performance' ),
@@ -282,7 +293,7 @@ final class Checklist {
 				'id'    => 'cookie-banner',
 				'group' => __( 'Tracking and consent', 'shd-performance' ),
 				'title' => __( 'Cookie banner: contrast and size on phones (own banner: SHD Consent)', 'shd-performance' ),
-				'why'   => __( 'The privacy link in the CookieFirst banner has a contrast of 1.76:1 (4.5:1 is required), the banner covers about two thirds of a phone screen, and it is loaded from CookieFirst’s servers in several steps, so on first visits it is often the slowest element on phones.', 'shd-performance' ),
+				'why'   => __( 'CookieFirst’s banner is loaded from its servers in eight steps, one after the other, and appears about 5–6 s after the page on phones (PageSpeed Insights, November 2026). It is the last thing to appear on every page, which costs Speed Index points everywhere, and on /impressum/ and /firmenverzeichnis/ its text is the largest element, so their LCP is about 4 s (mobile scores 80 and 78). Its script also blocks the main thread for 0.3 s on /firmenverzeichnis/. SHD Consent is part of the page and appears with the first paint. Also: the privacy link in the CookieFirst banner has a contrast of 1.76:1 (4.5:1 is required) and the banner covers about two thirds of a phone screen.', 'shd-performance' ),
 				'steps' => array(
 					__( 'Recommended: SHD Consent, your own banner (no outside service, no page-view limits). Install and activate it; while CookieFirst is active it waits. Check the texts, colours and the list of services under SHD Consent, and look at it with “Preview on the site”.', 'shd-performance' ),
 					__( 'Deactivate CookieFirst: SHD Consent takes over at once. SHD Tracking Manager and SHD Analytics keep working (the choice is stored in the same cookie), and choices visitors made in CookieFirst are taken over.', 'shd-performance' ),

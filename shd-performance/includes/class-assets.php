@@ -57,9 +57,11 @@ final class Assets {
 	public static function lazy_bg_css() {
 		$off       = '[data-shd-lazy-bg]:not(.shd-bg-in)';
 		$selectors = array( $off, $off . '::before', $off . '::after' );
-		// Only the elements Elementor paints backgrounds on (cheaper to match than "*" on large pages).
+		// Only the elements Elementor paints backgrounds on (cheaper to match than "*" on large pages),
+		// except inside a carousel slide that is already shown (.shd-bg-in on the slide).
 		foreach ( array( '.elementor-element', '.elementor-element::before', '.elementor-element::after', '.elementor-widget-container', '.elementor-motion-effects-layer', '.elementor-motion-effects-layer::before', '.elementor-background-overlay', '.elementor-background-slideshow::before', '.elementor-background-slideshow__slide__image', '.elementor-background-video-container::before' ) as $target ) {
-			$selectors[] = $off . ' ' . $target;
+			$parts       = explode( '::', $target, 2 );
+			$selectors[] = $off . ' ' . $parts[0] . ':not(.shd-bg-in):not(.shd-bg-in *)' . ( isset( $parts[1] ) ? '::' . $parts[1] : '' );
 		}
 		return implode( ',', $selectors ) . '{background-image:none!important}';
 	}

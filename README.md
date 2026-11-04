@@ -175,3 +175,21 @@ The fixture test reports, per page, what was changed. It fails if:
 - links, images, forms, iframes, videos, SVGs or headings disappear;
 - script tags are unbalanced;
 - the document no longer parses.
+
+### Claude Code memory (claude-mem)
+
+`.claude/settings.json` turns on the [claude-mem](https://github.com/thedotmack/claude-mem) plugin for this repository. It is pinned to `v15.9.0`, the release that was reviewed, and its usage statistics are off (`CLAUDE_MEM_TELEMETRY=0`).
+
+It works in Claude Code on your own computer. Cloud sessions don't load plugins from a repository and start on a fresh machine each time, so it doesn't run there.
+
+One-time setup on a computer:
+
+1. Install [Bun](https://bun.sh) if it's missing (Windows: `winget install Oven-sh.Bun`, macOS: `brew install oven-sh/bun/bun`).
+2. Start Claude Code in this folder and accept the trust prompt. Claude Code adds the marketplace and loads the plugin.
+3. Run `claude --init-only` in this folder once. It installs the plugin's dependencies and its `claude-mem` command. Then open a new terminal.
+
+claude-mem saves what Claude does in each session to `~/.claude-mem` on that computer. It summarises it with Claude Haiku on your own Claude plan and adds the relevant parts to new sessions.
+
+- **Switch it off on one computer:** put `{"enabledPlugins": {"claude-mem@thedotmack": false}}` in `.claude/settings.local.json`.
+- **Update:** review the new release, then change `ref`.
+- **`npx claude-mem install`:** if you use it instead, add `--provider claude`. Without it, the installer offers claude-mem's hosted service, which would send what it records to their servers.

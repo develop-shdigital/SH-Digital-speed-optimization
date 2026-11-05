@@ -6,7 +6,8 @@
  * data-shd-consent="<category>", so the browser ignores it. consent.js starts it,
  * in page order, once the category is allowed. Scripts that ask for consent
  * themselves (SHD Tracking Manager, SHD Analytics) and cookieless analytics are
- * left alone.
+ * left alone. Scripts of a consent tool this banner replaces (CookieFirst) are
+ * stopped for good: type="text/plain" without src, marked data-shd-stopped.
  *
  * @package SHD\Consent
  */
@@ -62,9 +63,11 @@ final class Blocker {
 
 	/**
 	 * @param string $html Finished HTML.
+	 * @param bool   $hold Hold back tracking scripts (otherwise only scripts of replaced
+	 *                     consent tools are stopped).
 	 * @return string
 	 */
-	public static function process( $html ) {
+	public static function process( $html, $hold = true ) {
 		if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
 			return $html;
 		}
@@ -76,10 +79,20 @@ final class Blocker {
 			if ( ! in_array( $type, self::RUNNABLE, true ) ) {
 				continue;
 			}
-			$id  = (string) $p->get_attribute( 'id' );
-			$src = $p->get_attribute( 'src' );
-			$src = is_string( $src ) ? trim( $src ) : '';
-			if ( self::kept( $id, $src ) ) {
+			$id   = (string) $p->get_attribute( 'id' );
+			$src  = $p->get_attribute( 'src' );
+			$src  = is_string( $src ) ? trim( $src ) : '';
+			$tool = '' !== $src ? Frontend::replaced( $src ) : '';
+			if ( '' !== $tool ) {
+				// Another consent tool written straight into the page (theme, code snippet): inert.
+				$p->remove_attribute( 'src' );
+				$p->set_attribute( 'type', 'text/plain' );
+				$p->set_attribute( 'data-shd-stopped', $tool );
+				Frontend::stopped( $tool, '' !== $id ? $id : 'page' );
+				++$held;
+				continue;
+			}
+			if ( ! $hold || self::kept( $id, $src ) ) {
 				continue;
 			}
 			$code     = '' === $src ? (string) $p->get_modifiable_text() : '';

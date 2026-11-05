@@ -3,7 +3,7 @@
  * Plugin Name:       SHD Consent
  * Plugin URI:        https://www.sh-digital.ch/
  * Description:       Own cookie consent banner: no third-party service, no page-view limits. Opt-in by category, Google Consent Mode v2, blocks tracking scripts until consent, consent log, and compatible with scripts written for CookieFirst.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.7
  * Requires PHP:      7.4
  * Author:            SH Digital
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SHD_CONSENT_VERSION', '1.0.0' );
+define( 'SHD_CONSENT_VERSION', '1.0.1' );
 define( 'SHD_CONSENT_FILE', __FILE__ );
 define( 'SHD_CONSENT_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SHD_CONSENT_URL', plugin_dir_url( __FILE__ ) );

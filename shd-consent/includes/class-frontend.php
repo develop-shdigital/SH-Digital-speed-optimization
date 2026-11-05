@@ -13,6 +13,12 @@ defined( 'ABSPATH' ) || exit;
 
 final class Frontend {
 
+	/** Consent tools this banner replaces (domain of their scripts => name). */
+	const REPLACED = array( 'cookiefirst.com' => 'CookieFirst' );
+
+	/** Option: stopped scripts of replaced consent tools, by handle or id (for the settings page). */
+	const STOPPED_OPTION = 'shd_consent_stopped';
+
 	/** @var bool|null Whether the banner is used on this request. */
 	private static $on = null;
 
@@ -24,7 +30,95 @@ final class Frontend {
 		add_action( 'wp_body_open', array( __CLASS__, 'banner' ), 1 );
 		add_action( 'wp_footer', array( __CLASS__, 'banner' ), 1 );
 		add_action( 'template_redirect', array( __CLASS__, 'start_buffer' ), 10000 );
+		// Before WordPress lists the hosts for its dns-prefetch hints (wp_head, 2), and again
+		// just before the head and footer scripts are printed, for scripts added later.
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'stop_replaced' ), PHP_INT_MAX );
+		add_action( 'wp_print_scripts', array( __CLASS__, 'stop_replaced' ), PHP_INT_MAX );
+		add_action( 'wp_print_footer_scripts', array( __CLASS__, 'stop_replaced' ), 9 );
 		add_shortcode( 'shd_cookie_settings', array( __CLASS__, 'shortcode' ) );
+	}
+
+	/**
+	 * A replaced consent tool that something still adds to the pages (a plugin setting, the
+	 * theme, a code snippet) would show its own banner and button next to this one and keep
+	 * its own record of the choice. While this banner is on, its scripts print nothing; the
+	 * handles stay registered, so scripts that depend on them still load.
+	 */
+	public static function stop_replaced() {
+		if ( ! self::on() ) {
+			return;
+		}
+		foreach ( wp_scripts()->registered as $handle => $script ) {
+			if ( ! is_string( $script->src ) || '' === $script->src ) {
+				continue;
+			}
+			$name = self::replaced( $script->src );
+			if ( '' !== $name ) {
+				$script->src = false;
+				self::stopped( $name, (string) $handle );
+			}
+		}
+	}
+
+	/**
+	 * @param string $url Script address.
+	 * @return string Name of the replaced consent tool the script belongs to, or ''.
+	 */
+	public static function replaced( $url ) {
+		$host = strtolower( (string) wp_parse_url( trim( $url ), PHP_URL_HOST ) );
+		if ( '' === $host ) {
+			return '';
+		}
+		foreach ( self::REPLACED as $domain => $name ) {
+			if ( $host === $domain || substr( $host, -strlen( $domain ) - 1 ) === '.' . $domain ) {
+				return $name;
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Remembers a stopped script for the settings page: written when a script is new, then at
+	 * most once a day per script. Not while an administrator only previews the banner.
+	 *
+	 * @param string $name   Consent tool.
+	 * @param string $source Script handle or id, or "page" for a script written into the page.
+	 */
+	public static function stopped( $name, $source ) {
+		if ( ! Settings::active() ) {
+			return;
+		}
+		$seen = self::stopped_scripts();
+		if ( isset( $seen[ $source ] ) && $seen[ $source ]['time'] > time() - DAY_IN_SECONDS ) {
+			return;
+		}
+		$seen[ $source ] = array(
+			'name' => $name,
+			'time' => time(),
+		);
+		uasort(
+			$seen,
+			function ( $a, $b ) {
+				return $b['time'] - $a['time'];
+			}
+		);
+		update_option( self::STOPPED_OPTION, array_slice( $seen, 0, 5, true ), true );
+	}
+
+	/**
+	 * @return array<string,array{name:string,time:int}> Stopped scripts by handle or id, latest first.
+	 */
+	public static function stopped_scripts() {
+		$seen = array();
+		foreach ( (array) get_option( self::STOPPED_OPTION, array() ) as $source => $item ) {
+			if ( is_array( $item ) && isset( $item['name'], $item['time'] ) ) {
+				$seen[ (string) $source ] = array(
+					'name' => (string) $item['name'],
+					'time' => (int) $item['time'],
+				);
+			}
+		}
+		return $seen;
 	}
 
 	/**
@@ -176,14 +270,15 @@ final class Frontend {
 	}
 
 	public static function start_buffer() {
-		if ( ! self::on() || empty( Settings::get()['block_scripts'] ) || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+		if ( ! self::on() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			return;
 		}
 		ob_start( array( __CLASS__, 'filter' ) );
 	}
 
 	/**
-	 * Output buffer: hold back tracking scripts in a complete HTML document.
+	 * Output buffer: stop scripts of replaced consent tools that are written straight into
+	 * the page, and hold back tracking scripts, in a complete HTML document.
 	 *
 	 * @param string $html  Buffer.
 	 * @param int    $phase PHP_OUTPUT_HANDLER_* flags.
@@ -199,7 +294,7 @@ final class Frontend {
 			}
 		}
 		try {
-			return Blocker::process( $html );
+			return Blocker::process( $html, ! empty( Settings::get()['block_scripts'] ) );
 		} catch ( \Throwable $error ) {
 			return $html;
 		}

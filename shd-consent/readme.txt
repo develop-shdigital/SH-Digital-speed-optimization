@@ -4,7 +4,7 @@ Tags: cookie banner, consent, gdpr, consent mode
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,10 +21,15 @@ Own cookie consent banner: no third-party service, no page-view or domain limits
 * Consent log as proof: time, random consent ID, categories, banner version and page; no IP address, no browser details. Search by consent ID, CSV export, automatic deletion after a set number of months.
 * The choice can be changed at any time: small round button, the shortcode [shd_cookie_settings], or any link to #cookie-einstellungen.
 * Waits while another banner plugin (CookieFirst, Complianz, CookieYes, Borlabs, Cookiebot, …) is active; administrators can preview it with ?shd-consent-preview=1.
+* Once it is on, CookieFirst scripts that something else still adds (a CookieFirst key in another plugin, the theme, a code snippet) are stopped, so there is only one banner, one button and one record of the choice. The settings page says where the script came from.
 
 The texts and the list of services must match your privacy policy; have them checked by whoever advises you on data protection.
 
 == Changelog ==
+
+= 1.0.1 =
+* While the banner is on, CookieFirst scripts that are still added by something other than the CookieFirst plugin (for example SHD Tracking Manager’s COOKIE_FIRST_API setting) are stopped. Before, visitors could see CookieFirst’s banner and its round button behind this one, and both tools kept their own record of the choice.
+* The settings page names the stopped script and where to remove it.
 
 = 1.0.0 =
 * First version.

@@ -244,6 +244,31 @@ final class Admin {
 			$text = sprintf( __( 'Waiting: %1$s is still active, so this banner stays hidden for visitors. Check it with the preview, then deactivate %1$s: this banner takes over at once.', 'shd-consent' ), $other );
 		}
 		echo '<div class="notice ' . esc_attr( $class ) . ' inline"><p><strong>' . esc_html( $text ) . '</strong> <a href="' . esc_url( add_query_arg( 'shd-consent-preview', '1', home_url( '/' ) ) ) . '" target="_blank" rel="noopener">' . esc_html__( 'Preview on the site', 'shd-consent' ) . '</a></p></div>';
+
+		$recent = array();
+		foreach ( Frontend::stopped_scripts() as $source => $item ) {
+			if ( $item['time'] > time() - WEEK_IN_SECONDS ) {
+				$recent[ $source ] = $item;
+			}
+		}
+		if ( $on && ! empty( $recent ) ) {
+			$first   = reset( $recent );
+			$sources = array();
+			foreach ( array_keys( $recent ) as $source ) {
+				$sources[] = 'page' === $source ? __( 'written into the page', 'shd-consent' ) : '“' . $source . '”';
+			}
+			$text = sprintf(
+				/* translators: 1: consent tool (CookieFirst), 2: script names, 3: date */
+				__( '%1$s is still added to your pages (script %2$s, last seen %3$s). SHD Consent stops it, so visitors see only this banner and only their choice here counts. Remove it where it is added: a plugin setting, the theme, a code snippet or wp-config.php.', 'shd-consent' ),
+				$first['name'],
+				implode( ', ', $sources ),
+				wp_date( (string) get_option( 'date_format' ), $first['time'] )
+			);
+			if ( array_filter( array_keys( $recent ), function ( $source ) { return 0 === strpos( (string) $source, 'shd-cookiefirst' ); } ) ) {
+				$text .= ' ' . __( '“shd-cookiefirst” comes from SHD Tracking Manager: empty COOKIE_FIRST_API under SHD Anfragen → Tracking, and remove it from wp-config.php if it is set there.', 'shd-consent' );
+			}
+			echo '<div class="notice notice-warning inline"><p>' . esc_html( $text ) . '</p></div>';
+		}
 	}
 
 	private static function tab_banner() {

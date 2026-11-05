@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.1
+Stable tag: 1.5.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,12 @@ SHD Performance → Images (or "Replace file" in the Media Library). Choose "Use
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.5.2 =
+* Iframes from other sites start on the visitor's first scroll, tap, key press or mouse movement (or after the delayed scripts' timeout, 10 s without any interaction) and then load when they are within half a screen. The chart app right under the heading of /industrie-case-study/ started with the page and its own tag manager, Google tags, TikTok pixel and reCAPTCHA cost 630 ms of Total Blocking Time on phones and 440 ms on computers.
+* Accessibility (setting renamed “Accessibility: link names, list roles, skip link, heading levels, logo text”): the main content gets the id the “Skip to content” link points to and, without a <main>, the main landmark; headings that skip levels keep their tag and look and get the right level for screen readers (aria-level); a logo whose alternative text is its file name gets the site's name (Yoast SEO); iframes without a title get one. Lighthouse accessibility 89–93 → 97 on the tested pages.
+* New setting “robots.txt and redirects of the other addresses” (Live): sitemap lines of the site's other addresses are removed from robots.txt (the old file is kept in uploads/shd-performance/backup), and other addresses that reach the server (sh-digital.ch, the old domains) are redirected by Apache in one step, before WordPress starts (pages only: form posts, the REST API, AJAX, cron and /.well-known/ are left alone). The rules are checked right after writing and removed again if the site does not answer; deactivating the plugin removes them.
+* Checklist: the accessibility, robots.txt and redirect tasks show their status automatically; the redirect task names the one step left at Hostpoint.
 
 = 1.5.1 =
 * The six IcoFont icons of the site (the delivery truck on /seo-spezialisten/ and the five check marks on /geo-agentur/) are drawn as inline SVG: SH Digital’s own drawings on the font’s grid, so their size, place and colours stay the same. When no other IcoFont icon is on a page, the IcoFont stylesheet (92 KB) is left out and its font (525 KB) is never downloaded. New setting “Draw the IcoFont icons as SVG” (Live).

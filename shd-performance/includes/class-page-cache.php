@@ -1326,7 +1326,7 @@ final class Page_Cache {
 	 * @param string $tag     Marker name.
 	 * @return string
 	 */
-	private static function strip_block( $content, $tag ) {
+	public static function strip_block( $content, $tag ) {
 		$tag     = preg_quote( $tag, '/' );
 		$updated = preg_replace( '/^[ \t]*# BEGIN ' . $tag . '[ \t]*\R.*?^[ \t]*# END ' . $tag . '[ \t]*(?:\R[ \t]*(?=\R))?\R?/ms', '', $content );
 		return is_string( $updated ) ? $updated : $content;
@@ -1487,7 +1487,7 @@ final class Page_Cache {
 	 *
 	 * @return bool
 	 */
-	private static function is_apache() {
+	public static function is_apache() {
 		global $is_apache;
 		return ! empty( $is_apache );
 	}

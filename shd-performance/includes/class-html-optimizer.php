@@ -107,6 +107,14 @@ final class Html_Optimizer {
 	// IcoFont icons marked to be drawn as SVG.
 	private $icons          = 0;
 
+	// Accessibility: the id the "Skip to content" link points to when no element has it,
+	// the outline so far (array( tag level, level given )), and whether an <a> to the
+	// homepage is open (its image is the logo).
+	private $skip_target    = '';
+	private $needs_main     = false;
+	private $headings       = array();
+	private $in_home_link   = false;
+
 	// Characters of main-content text seen so far.
 	private $text_now       = 0;
 
@@ -267,6 +275,12 @@ final class Html_Optimizer {
 
 		$this->has_body     = (bool) preg_match( '/<body\b/i', $html );
 		$this->unnamed_links = self::unnamed_links( $html );
+		$this->needs_main = ! preg_match( '/<main\b|\srole=["\']main["\']/i', $html );
+		// "Skip to content" link whose target does not exist (Hello Elementor points it at #content).
+		if ( preg_match( '/<a\b(?=[^>]*\bclass=["\'][^"\']*\bskip-link\b)[^>]*\bhref=["\']#([A-Za-z][\w-]*)["\']/i', $html, $skip )
+			&& ! preg_match( '/\sid=["\']' . preg_quote( $skip[1], '/' ) . '["\']/', $html ) ) {
+			$this->skip_target = $skip[1];
+		}
 		// LA-Studio Kit adds its "dlicon" icon font stylesheet to every page with its widgets, but
 		// draws its icons as inline SVG; the font is only needed for class="dlicon …" elements.
 		$this->uses_dlicon = (bool) preg_match( '/class=["\'][^"\']*\bdlicon\b|(?:["\']|&quot;)dlicon\s/i', $html );
@@ -296,7 +310,16 @@ final class Html_Optimizer {
 				$this->on_div( $p );
 				break;
 			case 'A':
+				$this->in_home_link = self::is_home_link( $p->get_attribute( 'href' ) );
 				$this->on_anchor( $p );
+				break;
+			case 'H1':
+			case 'H2':
+			case 'H3':
+			case 'H4':
+			case 'H5':
+			case 'H6':
+				$this->on_heading( $p, (int) substr( $tag, 1 ) );
 				break;
 			case 'IMG':
 				$this->on_img( $p );
@@ -357,6 +380,7 @@ final class Html_Optimizer {
 			} elseif ( ! $this->main_seen && 0 === $this->header_depth && ! $this->in_footer && ! $this->inside( 'popup' ) ) {
 				$role            = 'main';
 				$this->main_seen = true;
+				$this->skip_target_here( $p );
 			} else {
 				$role = 'nested';
 			}
@@ -531,6 +555,10 @@ final class Html_Optimizer {
 	 * @param string $tag Closing tag name.
 	 */
 	private function close( $tag ) {
+		if ( 'A' === $tag ) {
+			$this->in_home_link = false;
+			return;
+		}
 		if ( ! in_array( $tag, self::STRUCTURAL, true ) ) {
 			return;
 		}
@@ -802,6 +830,197 @@ final class Html_Optimizer {
 	}
 
 	/**
+	 * The "Skip to content" link points to an id no element has: the main content (the
+	 * page's Elementor document) gets it, so keyboard and screen reader users land there.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor at the main content element.
+	 */
+	private function skip_target_here( $p ) {
+		if ( empty( $this->on['a11y_names'] ) ) {
+			return;
+		}
+		// No <main> on the page (Elementor's full-width template): the main content is marked as
+		// the main landmark, which screen readers jump to ("Document does not have a main landmark").
+		if ( $this->needs_main && null === $p->get_attribute( 'role' ) ) {
+			$p->set_attribute( 'role', 'main' );
+			$this->needs_main = false;
+			$this->count( 'main_landmark' );
+		}
+		if ( '' === $this->skip_target || null !== $p->get_attribute( 'id' ) ) {
+			return;
+		}
+		$p->set_attribute( 'id', $this->skip_target );
+		$this->skip_target = '';
+		$this->count( 'skip_target' );
+	}
+
+	/**
+	 * An iframe without a title is announced as an unnamed frame ("Frames must have a title").
+	 * It gets one from what it shows: the kind of embed, or the last part of its address.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function frame_title( $p ) {
+		$title = $p->get_attribute( 'title' );
+		if ( is_string( $title ) && '' !== trim( $title ) ) {
+			return;
+		}
+		$src = $p->get_attribute( 'src' );
+		$src = is_string( $src ) && '' !== trim( $src ) ? $src : $p->get_attribute( 'data-src' );
+		$name = is_string( $src ) ? self::frame_name( $src ) : '';
+		if ( '' !== $name ) {
+			$p->set_attribute( 'title', $name );
+			$this->count( 'frame_titles' );
+		}
+	}
+
+	/**
+	 * @param string $src Iframe address.
+	 * @return string A title in the site's language, or ''.
+	 */
+	public static function frame_name( $src ) {
+		$de   = 0 === strpos( get_locale(), 'de' );
+		$src  = html_entity_decode( trim( $src ), ENT_QUOTES );
+		$host = strtolower( (string) wp_parse_url( ( 0 === strpos( $src, '//' ) ? 'https:' : '' ) . $src, PHP_URL_HOST ) );
+		$path = (string) wp_parse_url( $src, PHP_URL_PATH );
+		if ( '' === $host && '' === $path ) {
+			return '';
+		}
+		if ( preg_match( '/(?:^|\.)(?:youtube(?:-nocookie)?\.com|youtu\.be)$/', $host ) ) {
+			return $de ? 'YouTube-Video' : 'YouTube video';
+		}
+		if ( preg_match( '/(?:^|\.)vimeo\.com$/', $host ) ) {
+			return $de ? 'Vimeo-Video' : 'Vimeo video';
+		}
+		if ( preg_match( '/(?:^|\.)google\.[a-z.]+$/', $host ) && false !== strpos( $path, '/maps' ) ) {
+			return $de ? 'Karte (Google Maps)' : 'Map (Google Maps)';
+		}
+		if ( preg_match( '/(?:^|\.)calendly\.com$/', $host ) ) {
+			return $de ? 'Terminbuchung (Calendly)' : 'Booking (Calendly)';
+		}
+		$parts = array_values( array_filter( explode( '/', $path ), 'strlen' ) );
+		$last  = empty( $parts ) ? '' : rawurldecode( (string) end( $parts ) );
+		$last  = trim( (string) preg_replace( '/\.[a-z0-9]{2,5}$/i', '', $last ) );
+		$words = trim( (string) preg_replace( '/[\s_-]+/', ' ', $last ) );
+		if ( '' === $words || ! preg_match( '/\pL/u', $words ) || strlen( $words ) > 80 ) {
+			return '' !== $host ? ( $de ? 'Eingebetteter Inhalt von ' : 'Embedded content from ' ) . $host : '';
+		}
+		$words = function_exists( 'mb_strtoupper' ) ? mb_strtoupper( mb_substr( $words, 0, 1 ) ) . mb_substr( $words, 1 ) : ucfirst( $words );
+		if ( preg_match( '#/charts?/#i', $path ) ) {
+			return ( $de ? 'Diagramm: ' : 'Chart: ' ) . $words;
+		}
+		return $words;
+	}
+
+	/**
+	 * A heading that skips levels (an H4 right after the H1) breaks the outline screen
+	 * reader users navigate by and fails Lighthouse's heading order check. It keeps its
+	 * tag, look and SEO weight and gets the level it has in the outline (aria-level);
+	 * later headings of the same tag level under the same parent get the same level.
+	 * Levels set by the author (aria-level) and elements that are no heading for
+	 * assistive technology (another role) are left alone.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p     Processor.
+	 * @param int                    $level Level of the tag (1–6).
+	 */
+	private function on_heading( $p, $level ) {
+		if ( empty( $this->on['a11y_names'] ) ) {
+			return;
+		}
+		$role = $p->get_attribute( 'role' );
+		if ( is_string( $role ) && 'heading' !== strtolower( trim( $role ) ) ) {
+			return;
+		}
+		while ( ! empty( $this->headings ) && $this->headings[ count( $this->headings ) - 1 ][0] >= $level ) {
+			array_pop( $this->headings );
+		}
+		$given = empty( $this->headings ) ? $level : min( $level, $this->headings[ count( $this->headings ) - 1 ][1] + 1 );
+		$own   = $p->get_attribute( 'aria-level' );
+		if ( is_string( $own ) && ctype_digit( trim( $own ) ) && (int) $own > 0 ) {
+			$given = (int) $own;
+		} elseif ( $given !== $level ) {
+			$p->set_attribute( 'aria-level', (string) $given );
+			$this->count( 'heading_levels' );
+		}
+		$this->headings[] = array( $level, $given );
+	}
+
+	/**
+	 * The logo (an image linked to the homepage) whose alternative text is just its file
+	 * name ("SH-Digital_Logo_Preview_Midnight") gets the site's name instead. Images
+	 * without alt text are left to on_anchor(), which names the link.
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function logo_alt( $p ) {
+		$alt = $p->get_attribute( 'alt' );
+		if ( ! is_string( $alt ) || '' === trim( $alt ) || ! self::file_name_alt( $alt, (string) $p->get_attribute( 'src' ) ) ) {
+			return;
+		}
+		$name = self::brand_name();
+		if ( '' !== $name ) {
+			$p->set_attribute( 'alt', $name );
+			$this->count( 'logo_alt' );
+		}
+	}
+
+	/**
+	 * @param string $alt Alternative text.
+	 * @param string $src Image address.
+	 * @return bool Whether the text is the file name, or looks like one (no spaces, underscores).
+	 */
+	public static function file_name_alt( $alt, $src ) {
+		$words = static function ( $text ) {
+			return trim( (string) preg_replace( '/[\s_.-]+/', ' ', strtolower( $text ) ) );
+		};
+		$file = preg_replace( '/\.(?:png|jpe?g|webp|avif|gif|svg)$/i', '', wp_basename( (string) wp_parse_url( $src, PHP_URL_PATH ) ) );
+		$file = preg_replace( '/-(?:scaled|\d+x\d+|e\d{10,})$/i', '', (string) $file );
+		$alt  = trim( $alt );
+		return ( '' !== $file && $words( $alt ) === $words( $file ) )
+			|| ( false === strpos( $alt, ' ' ) && ( false !== strpos( $alt, '_' ) || preg_match( '/^(?:img|dsc|image|bild|logo)[\W_]*\d*$/i', $alt ) ) );
+	}
+
+	/**
+	 * @return string The organisation's or site's short name (Yoast SEO settings, else the site title), or ''.
+	 */
+	public static function brand_name() {
+		static $name = null;
+		if ( null !== $name ) {
+			return $name;
+		}
+		$names = array();
+		if ( class_exists( '\WPSEO_Options' ) ) {
+			$names[] = (string) \WPSEO_Options::get( 'company_name', '' );
+			$names[] = (string) \WPSEO_Options::get( 'website_name', '' );
+		}
+		$names[] = (string) get_bloginfo( 'name' );
+		$name    = '';
+		foreach ( $names as $candidate ) {
+			$candidate = trim( wp_strip_all_tags( html_entity_decode( $candidate, ENT_QUOTES | ENT_HTML5 ) ) );
+			if ( '' !== $candidate && strlen( $candidate ) <= 60 ) {
+				$name = $candidate;
+				break;
+			}
+		}
+		return $name;
+	}
+
+	/**
+	 * @param mixed $href Link target.
+	 * @return bool Whether the link goes to the homepage.
+	 */
+	private static function is_home_link( $href ) {
+		if ( ! is_string( $href ) || '' === trim( $href ) ) {
+			return false;
+		}
+		$strip = static function ( $url ) {
+			return strtolower( untrailingslashit( (string) preg_replace( '#^(?:https?:)?//#i', '', trim( $url ) ) ) );
+		};
+		$href = trim( html_entity_decode( $href, ENT_QUOTES ) );
+		return '/' === $href || $strip( $href ) === $strip( home_url( '/' ) );
+	}
+
+	/**
 	 * A name for an icon-only link, from its target, in the site's language.
 	 *
 	 * @param string $href Link target.
@@ -939,6 +1158,10 @@ final class Html_Optimizer {
 	 */
 	private function on_img( $p ) {
 		$loading = $p->get_attribute( 'loading' );
+
+		if ( $this->in_home_link && ! empty( $this->on['a11y_names'] ) ) {
+			$this->logo_alt( $p );
+		}
 
 		if ( ! empty( $this->on['lcp_image'] ) ) {
 			if ( $this->header_depth > 0 ) {
@@ -1200,6 +1423,9 @@ final class Html_Optimizer {
 	 * @param \WP_HTML_Tag_Processor $p Processor.
 	 */
 	private function on_iframe( $p ) {
+		if ( ! empty( $this->on['a11y_names'] ) ) {
+			$this->frame_title( $p );
+		}
 		// YouTube embeds in WordPress' responsive embed wrapper: the facade fills exactly the iframe's box.
 		if ( ! empty( $this->on['youtube_facade'] ) && $this->in_aspect_embed() ) {
 			// Embeds sit in article text, rarely at the top: the thumbnail is always lazy-loaded.
@@ -1998,7 +2224,9 @@ final class Html_Optimizer {
 		}
 		if ( $this->lazy_frames > 0 ) {
 			$this->count( 'lazy_frames', $this->lazy_frames );
-			$scripts .= '<script id="shd-perf-lazy-iframe">' . Assets::script( 'lazy-iframe' ) . "</script>\n";
+			// Without an interaction, frames start with the delayed scripts' timeout (10 s when that is 0).
+			$timeout  = (int) $this->s['delay_timeout'];
+			$scripts .= '<script id="shd-perf-lazy-iframe">window.shdPerfFrames=' . wp_json_encode( array( 'timeout' => ( $timeout > 0 ? $timeout : 10 ) * 1000 ) ) . ';' . Assets::script( 'lazy-iframe' ) . "</script>\n";
 		}
 		if ( ! empty( $this->on['rum'] ) ) {
 			$scripts .= Rum::loader_tag();

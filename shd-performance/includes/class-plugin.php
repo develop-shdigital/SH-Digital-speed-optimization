@@ -36,6 +36,7 @@ final class Plugin {
 		add_action( self::CRON_HOOK, array( $this, 'daily' ) );
 
 		Page_Cache::register();
+		Domain_Rules::register();
 		Youtube::register();
 		Rum::register();
 		Media_Replace::register();
@@ -265,5 +266,6 @@ final class Plugin {
 		wp_clear_scheduled_hook( self::CRON_HOOK );
 		wp_clear_scheduled_hook( Youtube::META_HOOK );
 		Page_Cache::teardown( true );
+		Domain_Rules::remove();
 	}
 }

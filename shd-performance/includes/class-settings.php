@@ -70,7 +70,7 @@ final class Settings {
 				'default' => 'live',
 				'risk'    => 'low',
 				'title'   => __( 'Lazy-load iframes below the first screen', 'shd-performance' ),
-				'fixes'   => __( 'Embeds such as maps load when they come near the viewport instead of during page load. Iframes from other sites (an embedded app, a map, a form) start loading only when they are half a screen away, or as soon as the page is laid out if they are already on screen: the browser’s own lazy-loading starts them several screens ahead, so the chart app on the industry case study still loaded, with its own Google Tag Manager, TikTok pixel and reCAPTCHA, while the page was loading (550 ms of blocked main thread on phones). The iframe keeps its size, so nothing moves.', 'shd-performance' ),
+				'fixes'   => __( 'Embeds such as maps load when they come near the viewport instead of during page load. Iframes from other sites (an embedded app, a map, a form) start on the visitor’s first scroll, tap, key press or mouse movement and then load when they are half a screen away; without any interaction they start after the timeout of the delayed scripts (10 s). The chart app on the industry case study sits right under the heading, so it used to start with the page and its own Google Tag Manager, TikTok pixel and reCAPTCHA blocked the main thread for 630 ms on phones and 440 ms on computers (PageSpeed Insights, November 2026). The iframe keeps its size, so nothing moves.', 'shd-performance' ),
 			),
 			'lazy_videos'         => array(
 				'group'   => 'content',
@@ -156,6 +156,13 @@ final class Settings {
 				'title'   => __( 'Unload add-on files a page does not use', 'shd-performance' ),
 				'fixes'   => __( 'Qi Addons is used on no page but loads 7 files on every page; LA-Studio Kit loads scripts on pages without its widgets. Their files are removed on pages that do not use them. The shared Swiper library that Elementor’s carousels need is kept.', 'shd-performance' ),
 			),
+			'domain_hygiene'      => array(
+				'group'   => 'domain',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'robots.txt and redirects of the other addresses', 'shd-performance' ),
+				'fixes'   => __( 'robots.txt: sitemap lines that point to another address of this site (https://sh-digital.ch/sitemap_index.xml next to the www one) are removed; the file is backed up first, nothing else in it changes. Redirects: the other addresses of the site that reach this server (sh-digital.ch without www, the old domains in the settings) are sent to the same page on https://www.sh-digital.ch by the web server in one step, before WordPress starts (WordPress needed about a second for this). Certificate checks (/.well-known/) are left alone; the rules are checked right after they are written and removed again if the site does not answer.', 'shd-performance' ),
+			),
 			'emoji'               => array(
 				'group'   => 'javascript',
 				'default' => 'live',
@@ -195,8 +202,8 @@ final class Settings {
 				'group'   => 'agents',
 				'default' => 'live',
 				'risk'    => 'low',
-				'title'   => __( 'Names for icon-only links, correct list roles', 'shd-performance' ),
-				'fixes'   => __( 'The menu button in the header, the close button of the menu and the back-to-top arrow are links that contain only an icon, so screen readers, AI agents and Lighthouse (“Links must have discernible text”) find no name for them. They now get one from what they do, in the language of the site: “Menü öffnen”, “Menü schliessen”, “Nach oben”, a phone number, an e-mail address, the social network or the title of the linked page. Elementor Pro also marks its loop grid and loop carousel as a list without list items (“Certain ARIA roles must contain particular children”): the cards of a grid become list items and the carousel, whose slides are labelled as slides, loses the wrong list role. Nothing visible changes.', 'shd-performance' ),
+				'title'   => __( 'Accessibility: link names, list roles, skip link, heading levels, logo text', 'shd-performance' ),
+				'fixes'   => __( 'The menu button in the header, the close button of the menu and the back-to-top arrow are links that contain only an icon, so screen readers, AI agents and Lighthouse (“Links must have discernible text”) find no name for them. They now get one from what they do, in the language of the site: “Menü öffnen”, “Menü schliessen”, “Nach oben”, a phone number, an e-mail address, the social network or the title of the linked page. Elementor Pro also marks its loop grid and loop carousel as a list without list items (“Certain ARIA roles must contain particular children”): the cards of a grid become list items and the carousel, whose slides are labelled as slides, loses the wrong list role. The “Skip to content” link points to #content, which no element had: the page’s main content gets that id. Headings that skip levels (an H4 right after the H1 on the homepage, H2 → H4 → H6 on /resultate/) keep their tag and look and get the level they have in the outline (aria-level), which is what screen readers and Lighthouse’s heading order check read. A logo whose alternative text is its file name gets the site’s name (from Yoast SEO: “SH Digital”). Nothing visible changes.', 'shd-performance' ),
 			),
 			'agent_probes'        => array(
 				'group'   => 'agents',

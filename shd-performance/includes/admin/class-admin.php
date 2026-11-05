@@ -1115,6 +1115,7 @@ final class Admin {
 			'fonts'       => __( 'Fonts', 'shd-performance' ),
 			'layout'      => __( 'Layout stability', 'shd-performance' ),
 			'agents'      => __( 'Accessibility and AI agents', 'shd-performance' ),
+			'domain'      => __( 'Domain and SEO', 'shd-performance' ),
 			'monitoring'  => __( 'Monitoring', 'shd-performance' ),
 		);
 		$labels   = array(

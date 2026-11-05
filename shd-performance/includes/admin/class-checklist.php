@@ -319,22 +319,23 @@ final class Checklist {
 				'title' => __( 'Fix the accessibility findings', 'shd-performance' ),
 				'why'   => __( 'Found by Lighthouse and the browser’s accessibility tree; they also count in the PageSpeed accessibility score.', 'shd-performance' ),
 				'steps' => array(
-					__( 'Done automatically (Optimizations → “Names for icon-only links, correct list roles”): the menu icon, its close button, the back-to-top icon and links that contain only an image get a name, and the loop grid and testimonial carousel get correct list roles. To use your own wording, add it in Elementor: Icon widget → Link options (gear icon) → Custom Attributes, for example “aria-label|Navigation öffnen”; the plugin keeps names that are already there.', 'shd-performance' ),
-					__( 'The “Skip to content” link points to #content, which does not exist: give the main content container the CSS ID “content” (Advanced → CSS ID) in the page and single templates.', 'shd-performance' ),
-					__( 'Homepage: “80+ Schweizer Betriebe vertrauen auf uns” is an H4 right after the H1; make it an H2 (style it the same) or a paragraph.', 'shd-performance' ),
-					__( 'Media library: give the logo a meaningful alternative text (for example “SH Digital”).', 'shd-performance' ),
+					__( 'Done automatically while “Accessibility: link names, list roles, skip link, heading levels, logo text” is live (Optimizations tab): icon-only links (menu, close, back to top, image links) get a name; the loop grid and testimonial carousel get correct list roles; the “Skip to content” link gets its target (the main content gets the id “content”); headings that skip levels (the H4 “80+ Schweizer Betriebe vertrauen auf uns” right after the H1 on the homepage, H2 → H4 → H6 on /resultate/) keep their tag and look and get the right level for screen readers (aria-level); the logo’s alternative text “SH-Digital_Logo_Preview_Midnight” becomes “SH Digital”.', 'shd-performance' ),
+					__( 'Optional, in Elementor: your own wording for an icon link (Icon widget → Link options (gear icon) → Custom Attributes, for example “aria-label|Navigation öffnen”), real H2 tags instead of H4 where it fits, and the logo’s alternative text in the media library. The plugin keeps what you set.', 'shd-performance' ),
 				),
+				'auto'  => array( __CLASS__, 'auto_accessibility' ),
 			),
 			array(
 				'id'    => 'redirects',
 				'group' => __( 'Domain and SEO hygiene', 'shd-performance' ),
 				'title' => __( 'Redirect old domains to https://www.sh-digital.ch/ in one step', 'shd-performance' ),
-				'why'   => __( 'shdigital.ch currently goes through two redirects (shdigital.ch → sh-digital.ch → www.sh-digital.ch).', 'shd-performance' ),
+				'why'   => __( 'shdigital.ch currently goes through two redirects (shdigital.ch → sh-digital.ch → www.sh-digital.ch), and the second one started WordPress (about a second).', 'shd-performance' ),
 				'steps' => array(
-					__( 'At the host or registrar, point shdigital.ch (and www.shdigital.ch) with a 301 straight to https://www.sh-digital.ch/ (keeping the path).', 'shd-performance' ),
+					__( 'Done automatically while “robots.txt and redirects of the other addresses” is live: every address that reaches this site (sh-digital.ch, the old domains) is sent to the same page on https://www.sh-digital.ch by the web server in one step, before WordPress starts.', 'shd-performance' ),
+					__( 'One step only you can do: shdigital.ch and www.shdigital.ch are redirected by Hostpoint before they reach the site, to https://sh-digital.ch/. In the Hostpoint Control Panel, open the redirect of shdigital.ch (and www.shdigital.ch) and change its target to https://www.sh-digital.ch/ (permanent, 301, keep the path). Then run the health checks again.', 'shd-performance' ),
 					__( 'Use https://www.sh-digital.ch/ in Google Business Profile, ads and social profiles.', 'shd-performance' ),
 				),
-				'auto'  => array( __CLASS__, 'auto_health' ),
+				'links' => array( 'Hostpoint Control Panel' => 'https://admin.hostpoint.ch/' ),
+				'auto'  => array( __CLASS__, 'auto_redirects' ),
 				'check' => 'redirects',
 			),
 			array(
@@ -343,10 +344,10 @@ final class Checklist {
 				'title' => __( 'Remove the non-www sitemap line from robots.txt', 'shd-performance' ),
 				'why'   => __( 'robots.txt lists https://sh-digital.ch/sitemap_index.xml in addition to the www version.', 'shd-performance' ),
 				'steps' => array(
-					__( 'Yoast SEO → Tools → File editor (or the robots.txt file on the server): delete the line with the non-www sitemap.', 'shd-performance' ),
+					__( 'Done automatically while “robots.txt and redirects of the other addresses” is live: sitemap lines that point to another address of the site are removed from robots.txt (a copy of the old file is kept in uploads/shd-performance/backup); nothing else in the file changes.', 'shd-performance' ),
 				),
 				'links' => array( __( 'Yoast file editor', 'shd-performance' ) => admin_url( 'admin.php?page=wpseo_tools&tool=file-editor' ) ),
-				'auto'  => array( __CLASS__, 'auto_health' ),
+				'auto'  => array( __CLASS__, 'auto_robots' ),
 				'check' => 'robots',
 			),
 			array(
@@ -516,6 +517,66 @@ final class Checklist {
 			'status' => 'open',
 			'note'   => __( '“Draw the IcoFont icons as SVG” is not live (Optimizations tab).', 'shd-performance' ),
 		);
+	}
+
+	public static function auto_accessibility() {
+		if ( 'live' === Settings::state( 'a11y_names' ) ) {
+			return array(
+				'status' => 'done',
+				'note'   => __( 'Done automatically: link names, list roles, skip link target, heading levels and the logo text.', 'shd-performance' ),
+			);
+		}
+		return array(
+			'status' => 'open',
+			'note'   => __( '“Accessibility: link names, list roles, skip link, heading levels, logo text” is not live (Optimizations tab).', 'shd-performance' ),
+		);
+	}
+
+	public static function auto_robots( array $task ) {
+		$status = Domain_Rules::status();
+		if ( 'live' === Settings::state( Domain_Rules::FEATURE ) && isset( $status['robots'] ) ) {
+			if ( in_array( $status['robots'], array( 'cleaned', 'clean' ), true ) ) {
+				return array(
+					'status' => 'done',
+					'note'   => isset( $status['robots_cleaned'] )
+						/* translators: %s: date */
+						? sprintf( __( 'Done automatically on %s; the old file is kept in uploads/shd-performance/backup.', 'shd-performance' ), wp_date( (string) get_option( 'date_format' ), (int) $status['robots_cleaned'] ) )
+						: __( 'robots.txt lists only this address’s sitemaps.', 'shd-performance' ),
+				);
+			}
+			if ( 'virtual' === $status['robots'] ) {
+				return array(
+					'status' => 'done',
+					'note'   => __( 'WordPress builds robots.txt; sitemap lines of other addresses are left out automatically.', 'shd-performance' ),
+				);
+			}
+			if ( 'unwritable' === $status['robots'] ) {
+				return array(
+					'status' => 'open',
+					'note'   => __( 'robots.txt cannot be changed by WordPress (file permissions): remove the line by hand.', 'shd-performance' ),
+				);
+			}
+		}
+		return self::auto_health( $task );
+	}
+
+	public static function auto_redirects( array $task ) {
+		$result = self::auto_health( $task );
+		$status = Domain_Rules::status();
+		$rules  = isset( $status['redirects'] ) ? $status['redirects'] : '';
+		$notes  = array(
+			'active'     => __( 'Other addresses that reach the site are redirected by the web server in one step.', 'shd-performance' ),
+			'reverted'   => __( 'The redirect rules were removed again because the site did not answer after they were written.', 'shd-performance' ),
+			'unwritable' => __( '.htaccess cannot be changed by WordPress (file permissions).', 'shd-performance' ),
+			'not_apache' => __( 'The server does not read .htaccess; set the redirects at the host.', 'shd-performance' ),
+		);
+		if ( isset( $notes[ $rules ] ) ) {
+			$result['note'] = trim( $notes[ $rules ] . ' ' . $result['note'] );
+		}
+		if ( 'done' !== $result['status'] && 'active' === $rules ) {
+			$result['note'] .= ' ' . __( 'The remaining extra step is the redirect at Hostpoint (see the steps).', 'shd-performance' );
+		}
+		return $result;
 	}
 
 	public static function auto_cookie_banner() {

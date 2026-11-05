@@ -142,6 +142,13 @@ final class Settings {
 				'title'   => __( 'Fonts: visible text, WOFF2, preload and size-matched fallback', 'shd-performance' ),
 				'fixes'   => __( 'Sets font-display: swap so text is never invisible, serves WOFF2 files when you upload them on the Fonts tab (same letters, a fraction of the size of the current .ttf files), preloads the main weights and uses a size-matched fallback so the text barely moves when the font arrives.', 'shd-performance' ),
 			),
+			'svg_icons'           => array(
+				'group'   => 'fonts',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'Draw the IcoFont icons as SVG instead of loading the icon font', 'shd-performance' ),
+				'fixes'   => __( 'The delivery truck on /seo-spezialisten/ and the five check marks on /geo-agentur/ came from IcoFont: a 525 KB font and a 92 KB stylesheet for six icons. They are now SH Digital’s own drawings, inline in the page, at the same size and place and in the colours set in Elementor. When no other IcoFont icon is on a page, its stylesheet is left out and the font is never downloaded.', 'shd-performance' ),
+			),
 			'addon_assets'        => array(
 				'group'   => 'javascript',
 				'default' => 'live',

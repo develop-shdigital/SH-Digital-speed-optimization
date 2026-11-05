@@ -163,12 +163,12 @@ final class Checklist {
 				'id'    => 'icofont',
 				'group' => __( 'Fonts and icons', 'shd-performance' ),
 				'title' => __( 'Replace the six IcoFont icons (526 KB font for six icons)', 'shd-performance' ),
-				'why'   => __( 'One icon on /seo-spezialisten/ (“fast delivery”) and five check marks on /geo-agentur/ (“tick boxed”) come from IcoFont, LA-Studio Kit’s icon font. For them every phone downloads the whole font, 526 KB, with the highest priority, plus a 90 KB stylesheet: more than all other files of the page’s first screen together. Elementor’s own icons are drawn as small inline SVG (with “Inline Font Icons” active) and need no download.', 'shd-performance' ),
+				'why'   => __( 'One icon on /seo-spezialisten/ (“fast delivery”) and five check marks on /geo-agentur/ (“tick boxed”) come from IcoFont, LA-Studio Kit’s icon font. For them every phone downloads the whole font, 526 KB, with the highest priority, plus a 90 KB stylesheet: more than all other files of the page’s first screen together. SHD Performance now draws both icons itself as inline SVG (SH Digital’s own drawings, same size, place and colours) and leaves IcoFont out; nothing to do while “Draw the IcoFont icons as SVG” is live.', 'shd-performance' ),
 				'steps' => array(
-					__( '/seo-spezialisten/: open the page in Elementor, click the icon with the delivery truck and choose a similar icon from “Font Awesome” in the icon library (for example “shipping-fast” or “truck”), or upload an SVG. Update.', 'shd-performance' ),
-					__( '/geo-agentur/: the five check marks of the list. Choose “check-square” or “check-circle” from Font Awesome instead. Update.', 'shd-performance' ),
-					__( 'Purge the page cache and open both pages: IcoFont is no longer loaded (LA-Studio Kit only adds it to pages that use one of its icons).', 'shd-performance' ),
+					__( 'Nothing to do while “Draw the IcoFont icons as SVG” is live on the Optimizations tab.', 'shd-performance' ),
+					__( 'If you add another IcoFont icon later, IcoFont is loaded again on that page: prefer an icon from Font Awesome (drawn as inline SVG by Elementor) or upload an SVG.', 'shd-performance' ),
 				),
+				'auto'  => array( __CLASS__, 'auto_icofont' ),
 			),
 			array(
 				'id'    => 'qi-addons',
@@ -505,6 +505,19 @@ final class Checklist {
 	 *
 	 * @return array
 	 */
+	public static function auto_icofont() {
+		if ( 'live' === Settings::state( 'svg_icons' ) ) {
+			return array(
+				'status' => 'done',
+				'note'   => __( 'Done automatically: the six icons are drawn as SVG and IcoFont is not loaded.', 'shd-performance' ),
+			);
+		}
+		return array(
+			'status' => 'open',
+			'note'   => __( '“Draw the IcoFont icons as SVG” is not live (Optimizations tab).', 'shd-performance' ),
+		);
+	}
+
 	public static function auto_cookie_banner() {
 		if ( ! class_exists( '\SHD\Consent\Settings' ) ) {
 			return array(
@@ -513,9 +526,19 @@ final class Checklist {
 			);
 		}
 		if ( \SHD\Consent\Settings::active() ) {
+			$note = __( 'SHD Consent shows the banner.', 'shd-performance' );
+			if ( method_exists( '\SHD\Consent\Frontend', 'stopped_scripts' ) ) {
+				foreach ( \SHD\Consent\Frontend::stopped_scripts() as $source => $item ) {
+					if ( $item['time'] > time() - WEEK_IN_SECONDS ) {
+						/* translators: 1: consent tool, 2: script name */
+						$note .= ' ' . sprintf( __( 'It stops %1$s, which is still added to the pages (“%2$s”); see SHD Consent’s settings page for where to remove it.', 'shd-performance' ), $item['name'], $source );
+						break;
+					}
+				}
+			}
 			return array(
 				'status' => 'done',
-				'note'   => __( 'SHD Consent shows the banner.', 'shd-performance' ),
+				'note'   => $note,
 			);
 		}
 		$other = \SHD\Consent\Settings::other_banner();

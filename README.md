@@ -31,6 +31,7 @@ SHD Performance rewrites each finished page after Elementor and the other plugin
 | CookieFirst `consent.js` blocks the first paint (about 1 s on phones). | Downloaded early without blocking and started at the top of `<body>`. | Live |
 | Duplicate scripts, emoji script, unused Qi Addons / LA-Studio Kit files. | Removed on pages that do not need them. | Live |
 | Four Fractul Office `.ttf` files (1.12 MB) with `font-display: auto`. | `swap`, uploaded WOFF2 files (lossless; 58 KB each, plus 25 KB Latin subsets that cover all the site's text), preloads, and a size-matched Arial fallback. | Live |
+| Six icons (a delivery truck on /seo-spezialisten/, five check marks on /geo-agentur/) load IcoFont: a 525 KB font and a 92 KB stylesheet with 2,100 icons. | Drawn as inline SVG instead (SH Digital's own drawings on the font's grid, so size, place and colours stay the same); the IcoFont stylesheet is left out when no other IcoFont icon is on the page, so the font is never downloaded. | Live |
 | Elementor Pro fills the blog table of contents after loading, which pushes the article down: CLS above 0.1 on 18 of 30 blog pages on phones, up to 0.69. | The same list is written into the page, so nothing moves. It looks and works as before. Optionally it starts collapsed on phones (see below). | Live |
 | The cursor-dot script redraws 60×/s forever and leaves a stray dot on phones. | Same effect on mouse devices, idle when the mouse rests, hidden on touch devices. | Live |
 | JavaScript blocks rendering and causes about 1 s of Total Blocking Time on mobile. | Defer all scripts, or start them on the first interaction (taps and form submits are replayed). | Test |
@@ -125,6 +126,7 @@ An own consent banner instead of CookieFirst: no outside service, no page-view o
 - **Withdrawal:** the round button at the bottom left, the shortcode `[shd_cookie_settings]` or any link to `#cookie-einstellungen` opens the settings; withdrawing a category deletes its cookies (`_ga`, `_gcl_au`, …) and reloads the page.
 - **Consent log:** time, random consent ID (also in the visitor's cookie), categories, banner version and page; no IP address or browser details. Search by consent ID, CSV export, deleted after 24 months (adjustable).
 - **Switching:** while CookieFirst (or another banner plugin) is active, SHD Consent waits; administrators see it with `?shd-consent-preview=1`. Deactivating CookieFirst switches over at once.
+- **No second banner:** while SHD Consent is on, CookieFirst scripts that something else still adds (on this site SHD Tracking Manager loaded CookieFirst with its `COOKIE_FIRST_API` key after the CookieFirst plugin was deactivated) are stopped, so visitors see one banner and one round button, and only one record of the choice exists. The settings page names the script and where to remove it.
 
 ## Results
 

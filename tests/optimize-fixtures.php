@@ -198,12 +198,26 @@ foreach ( $files as $file ) {
 	if ( false !== strpos( $result, 'data-shd-yt-iframe=' ) ) {
 		$problems[] = 'YouTube iframe marker left behind';
 	}
+	// IcoFont icons drawn as SVG: one <svg> each, no marker left, and the IcoFont stylesheet
+	// only left out when nothing on the page mentions IcoFont any more.
+	$drawn_icons = substr_count( $result, 'class="shd-icon ' );
+	$counters    = $optimizer->stats();
+	if ( false !== strpos( $result, Html_Optimizer::ICON_MARK . '=' ) ) {
+		$problems[] = 'icon marker left behind';
+	}
+	if ( $drawn_icons !== ( isset( $counters['icons_svg'] ) ? (int) $counters['icons_svg'] : 0 ) ) {
+		$problems[] = 'drawn icons and counter differ';
+	}
+	if ( ! empty( $counters['icon_font_removed'] ) && false !== stripos( $result, 'icofont' ) ) {
+		$problems[] = 'IcoFont stylesheet left out while IcoFont is still used';
+	}
 	foreach ( array( '<img', '<a ', '<form', '<iframe', '<video', '<svg', '<h1', '<h2' ) as $tag ) {
 		$expected = substr_count( $markup_before, $tag );
 		if ( '<img' === $tag || '<svg' === $tag ) {
 			$expected += $facades;
 			if ( '<svg' === $tag ) {
 				$expected += substr_count( $markup_after, 'data-shd-toc-toggle' ); // Arrow icon of each table of contents button.
+				$expected += $drawn_icons;
 			}
 		} elseif ( '<iframe' === $tag ) {
 			$expected -= $iframe_facades;

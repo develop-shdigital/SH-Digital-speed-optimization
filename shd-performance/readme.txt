@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,10 @@ SHD Performance → Images (or "Replace file" in the Media Library). Choose "Use
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.5.1 =
+* The six IcoFont icons of the site (the delivery truck on /seo-spezialisten/ and the five check marks on /geo-agentur/) are drawn as inline SVG: SH Digital’s own drawings on the font’s grid, so their size, place and colours stay the same. When no other IcoFont icon is on a page, the IcoFont stylesheet (92 KB) is left out and its font (525 KB) is never downloaded. New setting “Draw the IcoFont icons as SVG” (Live).
+* Checklist: the IcoFont task is done automatically; the cookie banner task says when SHD Consent stops a CookieFirst script that something else still adds.
 
 = 1.5.0 =
 * One stylesheet instead of many: the render-blocking stylesheets in <head> and the inline styles between them are joined, in the same order, into one cached file (22 to 33 files per page before; PageSpeed Insights showed the last one arriving up to 1.5 s after the page). Stylesheets that could behave differently when joined stay separate. Fonts without font-display (IcoFont) get font-display: swap. Checked on 10 pages on phones and computers: same CSS rules, same layout, pixel-identical screenshots.

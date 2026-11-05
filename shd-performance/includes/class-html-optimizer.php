@@ -23,6 +23,9 @@ final class Html_Optimizer {
 	/** Attribute that marks tags to delete in finalize(). */
 	const REMOVE_MARK = 'data-shd-x';
 
+	/** Attribute that marks an IcoFont <i> to draw as SVG in finalize(). */
+	const ICON_MARK = 'data-shd-icon';
+
 	/**
 	 * Characters of main-content text after which an element no longer counts as first
 	 * screen, even when the page is one large section (the hero texts here have 70 to 290
@@ -100,6 +103,9 @@ final class Html_Optimizer {
 
 	// Iframes from other sites that load when they come near the screen.
 	private $lazy_frames    = 0;
+
+	// IcoFont icons marked to be drawn as SVG.
+	private $icons          = 0;
 
 	// Characters of main-content text seen so far.
 	private $text_now       = 0;
@@ -309,6 +315,9 @@ final class Html_Optimizer {
 				break;
 			case 'STYLE':
 				$this->on_style( $p );
+				break;
+			case 'I':
+				$this->on_icon( $p );
 				break;
 		}
 	}
@@ -1308,6 +1317,23 @@ final class Html_Optimizer {
 	}
 
 	/**
+	 * An IcoFont icon with an SVG drawing: marked here, drawn in insert_icons().
+	 *
+	 * @param \WP_HTML_Tag_Processor $p Processor.
+	 */
+	private function on_icon( $p ) {
+		if ( empty( $this->on['svg_icons'] ) ) {
+			return;
+		}
+		$class = $p->get_attribute( 'class' );
+		if ( ! is_string( $class ) || false === strpos( $class, 'icofont-' ) || ! preg_match( '/(?<![\w-])(icofont-[a-z0-9-]+)(?![\w-])/', $class, $m ) || '' === Icons::svg( $m[1] ) ) {
+			return;
+		}
+		$p->set_attribute( self::ICON_MARK, $m[1] );
+		++$this->icons;
+	}
+
+	/**
 	 * @param \WP_HTML_Tag_Processor $p Processor.
 	 */
 	private function on_style( $p ) {
@@ -1613,6 +1639,7 @@ final class Html_Optimizer {
 
 		$html = preg_replace( '/<script\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>\s*<\/script>[ \t]*\n?/i', '', $html );
 		$html = preg_replace( '/<link\b[^>]*\b' . self::REMOVE_MARK . '\b[^>]*>[ \t]*\n?/i', '', $html );
+		$html = $this->insert_icons( $html );
 
 		if ( ! empty( $this->on['lcp_image'] ) ) {
 			$html = $this->drop_unused_preloads( $html );
@@ -1629,6 +1656,60 @@ final class Html_Optimizer {
 		$html = $this->insert_body_end( $html );
 
 		return $html;
+	}
+
+	/**
+	 * Draws the marked IcoFont icons as inline SVG inside the same <i>, so Elementor's
+	 * size, spacing and colour rules for the icon still apply, and leaves out the IcoFont
+	 * stylesheet when nothing on the page mentions IcoFont any more: its 525 KB font is
+	 * then never downloaded. Runs before the stylesheets are combined.
+	 *
+	 * @param string $html Document.
+	 * @return string
+	 */
+	private function insert_icons( $html ) {
+		if ( 0 === $this->icons ) {
+			return $html;
+		}
+		$drawn = 0;
+		$new   = preg_replace_callback(
+			'#<i\b([^>]*?)\s' . self::ICON_MARK . '="(icofont-[a-z0-9-]+)"([^>]*)>\s*</i>#i',
+			function ( $m ) use ( &$drawn ) {
+				$svg = Icons::svg( $m[2] );
+				if ( '' === $svg ) {
+					return $m[0];
+				}
+				$name  = $m[2];
+				$attrs = preg_replace_callback(
+					'/(\sclass=)(["\'])(.*?)\2/i',
+					function ( $c ) use ( $name ) {
+						$classes = array_diff( preg_split( '/\s+/', trim( $c[3] ) ), array( 'icofont', $name, '' ) );
+						array_unshift( $classes, 'shd-icon', Icons::class_name( $name ) );
+						return $c[1] . $c[2] . implode( ' ', $classes ) . $c[2];
+					},
+					$m[1] . $m[3],
+					1
+				);
+				++$drawn;
+				return '<i' . $attrs . '>' . $svg . '</i>';
+			},
+			$html
+		);
+		$new = is_string( $new ) ? $new : $html;
+		// A marked icon that could not be drawn (an <i> with content) keeps the font.
+		$clean = preg_replace( '#(<i\b[^>]*?)\s' . self::ICON_MARK . '="[^"]*"#i', '$1', $new );
+		$new   = is_string( $clean ) ? $clean : $new;
+		if ( 0 === $drawn ) {
+			return $new;
+		}
+		$this->count( 'icons_svg', $drawn );
+
+		$rest = preg_replace( '#<link\b[^>]*\bid=(["\'])elementor-icons-icofont-css\1[^>]*>[ \t]*\n?#i', '', $new );
+		if ( is_string( $rest ) && $rest !== $new && false === stripos( $rest, 'icofont' ) ) {
+			$new = $rest;
+			$this->count( 'icon_font_removed' );
+		}
+		return $new;
 	}
 
 	/**

@@ -1,3 +1,5 @@
 dist/
 node_modules/
 .DS_Store
+tools/perf-lab/node_modules/
+tools/perf-lab/work/

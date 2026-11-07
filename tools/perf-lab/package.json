@@ -1,0 +1,12 @@
+{
+  "name": "perf-lab",
+  "private": true,
+  "type": "module",
+  "description": "Measurement and test tools for the speed work. See README.md.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "chrome-devtools-mcp": "1.12.0",
+    "lighthouse": "13.6.0",
+    "puppeteer-core": "25.16.0"
+  }
+}

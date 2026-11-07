@@ -8,6 +8,8 @@ Tools for making https://www.sh-digital.ch fast: a 95+ PageSpeed score on mobile
 | `shd-consent/` | SHD Consent, the own cookie consent banner that replaces CookieFirst. |
 | `tools/build.sh` | Minifies the plugins' front-end scripts and builds `dist/shd-performance-<version>.zip` and `dist/shd-consent-<version>.zip`. |
 | `tests/optimize-fixtures.php` | Runs the optimizer over saved pages and checks that nothing visible was lost. |
+| `tools/perf-lab/` | Measurement and test lab: PageSpeed results, Chrome DevTools audits, a local replay of the live site, Lighthouse runs, a local WordPress. See its README. |
+| `HANDOFF.md` | How to repeat this work on another site: setup, skills, strategy, lessons. |
 | `.claude/skills/web-perf/` | The Chrome DevTools performance skill used for the diagnosis. |
 
 ## The plugin

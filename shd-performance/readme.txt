@@ -4,7 +4,7 @@ Tags: performance, core web vitals, elementor, pagespeed
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.2
+Stable tag: 1.5.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,9 @@ SHD Performance → Images (or "Replace file" in the Media Library). Choose "Use
 No. Each page view may send one anonymous beacon with the metric values, the page path and whether the screen is phone-sized. No IP address, user agent or identifier is stored. Data older than 90 days is deleted. Automated browsers (tests, and PageSpeed Insights' lab runs) send nothing, so the numbers come from real visits only.
 
 == Changelog ==
+
+= 1.5.3 =
+* New setting “Load stylesheets that WordPress adds at the end of the page with the others” (Live): this site's own stylesheets that WordPress prints in the page body (added by a shortcode or widget while the page is built) are loaded in <head> after the other styles and joined with them. The new growth curve in the homepage hero loaded its stylesheet that way: the hero showed both of its drawings (841 px tall) until the stylesheet hid one, a layout shift of 0.164 on computers in PageSpeed Insights. Measured on the homepage: CLS 0.167 → 0.0001 at 1350 px, 0.088 → 0 at 1920 px, 0.012 → 0.001 on phones. Stylesheets of other sites, print styles and the ones Elementor loads itself stay where they are.
 
 = 1.5.2 =
 * Iframes from other sites start on the visitor's first scroll, tap, key press or mouse movement (or after the delayed scripts' timeout, 10 s without any interaction) and then load when they are within half a screen. The chart app right under the heading of /industrie-case-study/ started with the page and its own tag manager, Google tags, TikTok pixel and reCAPTCHA cost 630 ms of Total Blocking Time on phones and 440 ms on computers.

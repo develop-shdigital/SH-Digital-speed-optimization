@@ -1872,6 +1872,9 @@ final class Html_Optimizer {
 		}
 		$this->background_preloads( $html );
 		$html = $this->insert_head( $html );
+		if ( ! empty( $this->on['late_styles'] ) ) {
+			$html = $this->move_late_styles( $html );
+		}
 		if ( ! empty( $this->on['combine_css'] ) ) {
 			list( $html, $joined ) = Css_Combiner::combine( $html );
 			if ( $joined > 0 ) {
@@ -1882,6 +1885,74 @@ final class Html_Optimizer {
 		$html = $this->insert_body_end( $html );
 
 		return $html;
+	}
+
+	/**
+	 * Stylesheets WordPress prints in the page body (enqueued while the page was built: a
+	 * shortcode or widget that loads its own CSS) arrive after the content above them has
+	 * been shown, which then changes size. The homepage's growth curve showed both of its
+	 * drawings (841 px tall) until wachstum.css hid one: CLS 0.164 on desktop. This site's
+	 * stylesheets for all media move to <head>, right after the page's other styles, where
+	 * WordPress prints a stylesheet that is enqueued in time; the combiner then joins them.
+	 * Left alone: other sites' files, print and other media, special attributes (onload,
+	 * integrity…), the files Elementor's scripts load themselves, and anything inside
+	 * <noscript>, <template>, scripts or comments.
+	 *
+	 * @param string $html Document.
+	 * @return string
+	 */
+	private function move_late_styles( $html ) {
+		$body = stripos( $html, '<body' );
+		$end  = stripos( $html, '</head>' );
+		if ( false === $body || false === $end || $end > $body || ! preg_match_all( '#<link\b[^>]*>#i', $html, $links, PREG_OFFSET_CAPTURE, $body ) ) {
+			return $html;
+		}
+		$skip = array();
+		if ( preg_match_all( '#<(noscript|template|script|textarea|xmp)\b[^>]*>.*?</\1\s*>|<!--.*?-->#is', $html, $blocks, PREG_OFFSET_CAPTURE, $body ) ) {
+			foreach ( $blocks[0] as $block ) {
+				$skip[] = array( $block[1], $block[1] + strlen( $block[0] ) );
+			}
+		}
+		$moved = array();
+		for ( $i = count( $links[0] ) - 1; $i >= 0; $i-- ) {
+			list( $tag, $at ) = $links[0][ $i ];
+			$a = Css_Combiner::attributes( $tag );
+			if ( ! isset( $a['rel'], $a['href'] ) || 'stylesheet' !== strtolower( trim( $a['rel'] ) ) || array_intersect( array_keys( $a ), Css_Combiner::SPECIAL ) ) {
+				continue;
+			}
+			$media = isset( $a['media'] ) ? strtolower( trim( $a['media'] ) ) : '';
+			if ( ! in_array( $media, array( '', 'all', 'screen' ), true ) ) {
+				continue;
+			}
+			$href = html_entity_decode( $a['href'], ENT_QUOTES );
+			foreach ( Css_Combiner::KEEP as $kept ) {
+				if ( false !== strpos( $href, $kept ) ) {
+					continue 2;
+				}
+			}
+			foreach ( $skip as $range ) {
+				if ( $at > $range[0] && $at < $range[1] ) {
+					continue 2;
+				}
+			}
+			if ( ! Fonts::local_path( $href ) ) {
+				continue;
+			}
+			$moved[] = trim( $tag );
+			$html    = substr( $html, 0, $at ) . substr( $html, $at + strlen( $tag ) );
+		}
+		if ( empty( $moved ) ) {
+			return $html;
+		}
+		// Right after the last stylesheet or <style> in <head>, so the order of the styles stays.
+		$end = stripos( $html, '</head>' );
+		$at  = $end;
+		if ( preg_match_all( '#<link\b[^>]*\brel=["\']?stylesheet\b[^>]*>|</style\s*>#i', substr( $html, 0, $end ), $last, PREG_OFFSET_CAPTURE ) ) {
+			$hit = end( $last[0] );
+			$at  = $hit[1] + strlen( $hit[0] );
+		}
+		$this->count( 'late_styles', count( $moved ) );
+		return substr( $html, 0, $at ) . "\n" . implode( "\n", array_reverse( $moved ) ) . substr( $html, $at );
 	}
 
 	/**

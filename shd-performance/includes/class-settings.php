@@ -135,6 +135,13 @@ final class Settings {
 				'title'   => __( 'Load the page’s stylesheets as one file', 'shd-performance' ),
 				'fixes'   => __( 'WordPress links every plugin’s and every Elementor widget’s stylesheet separately, and nothing appears until all of them have arrived: 22 to 33 files per page here, which the server answered in waves, the last one up to 1.5 s after the page itself (PageSpeed Insights, November 2026). They are joined, with the inline styles between them, in exactly the same order into one cached file, so the page looks the same. Stylesheets that could behave differently when joined stay separate (other sites, print styles, @import, Elementor’s Swiper, lightbox and dialog styles, which Elementor loads itself). Fonts without a font-display rule (the IcoFont icons of LA-Studio Kit) get font-display: swap.', 'shd-performance' ),
 			),
+			'late_styles'         => array(
+				'group'   => 'css',
+				'default' => 'live',
+				'risk'    => 'low',
+				'title'   => __( 'Load stylesheets that WordPress adds at the end of the page with the others', 'shd-performance' ),
+				'fixes'   => __( 'A shortcode or widget that loads its own stylesheet while the page is built gets it printed at the end of the page, so the content above shows without its styles first and jumps when they arrive. The growth curve in the homepage hero showed both of its drawings (841 px tall) until its stylesheet arrived and hid one: a layout shift of 0.164 on computers (PageSpeed Insights, November 2026). This site’s own stylesheets printed in the page body are loaded in <head> after the other styles, where WordPress puts them when they are added in time, and joined with them. Stylesheets of other sites, print styles and the ones Elementor loads itself stay where they are.', 'shd-performance' ),
+			),
 			'fonts'               => array(
 				'group'   => 'fonts',
 				'default' => 'live',
